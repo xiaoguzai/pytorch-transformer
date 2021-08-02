@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import json
 import math
+
 class Bert(nn.Module):
     def __init__(self,
                 initializer_range=0.02,#1
@@ -48,6 +49,7 @@ class Bert(nn.Module):
         #super(Nezha, self).__init__()
         super(Bert,self).__init__()
         print('__init__ Nezha')
+        self.name = 'bert'
         self.initializer_range = initializer_range#1
         self.embedding_size = embedding_size#4
         self.project_embeddings_with_bias = project_embeddings_with_bias#5
@@ -80,13 +82,13 @@ class Bert(nn.Module):
         self.max_position_embeddings = max_position_embeddings
         self.max_relative_position = max_relative_position
         self.with_pooler = with_pooler
-        self.embeddings = Embeddings(vocab_size = self.vocab_size,
+        self.bertembeddings = Embeddings(vocab_size = self.vocab_size,
                           embedding_size = self.embedding_size,
                           mask_zero = self.mask_zero,
                           max_position_embeddings = self.max_position_embeddings,
                           token_type_vocab_size = self.token_type_vocab_size,
                           hidden_dropout = self.hidden_dropout)
-        self.encoder_layer = nn.ModuleList()
+        self.bert_encoder_layer = nn.ModuleList()
         for layer_ndx in range(self.num_layers):
             encoder_layer = Transformer(initializer_range = self.initializer_range,
                                            num_attention_heads = self.num_attention_heads,
@@ -99,16 +101,18 @@ class Bert(nn.Module):
                                            solution = self.solution,
                                            max_relative_position = self.max_relative_position
                                           )
-            self.encoder_layer.append(encoder_layer)
+            self.bert_encoder_layer.append(encoder_layer)
         if self.with_pooler:
-            self.pooler = nn.Linear(embedding_size,embedding_size)
+            self.bert_pooler = nn.Linear(embedding_size,embedding_size)
     
     def forward(self,inputs):
-        outputs = self.embeddings(inputs)
-        for layer_ndx in self.encoder_layer:
+        outputs = self.bertembeddings(inputs)
+        print('embedding_outputs = ')
+        print(outputs)
+        for layer_ndx in self.bert_encoder_layer:
             outputs = layer_ndx(outputs)
         if self.with_pooler:
-            outputs = self.pooler(outputs)
+            outputs = self.bert_pooler(outputs)
         return outputs
 
 class LayerNorm(nn.Module):
@@ -142,7 +146,7 @@ class Embeddings(nn.Module):
         self.word_embeddings_layer = nn.Embedding(vocab_size,embedding_size)
         self.segment_embeddings_layer = nn.Embedding(token_type_vocab_size,embedding_size)
         self.position_embeddings_layer = nn.Embedding(max_position_embeddings,embedding_size)
-        self.layer_normalization = LayerNorm(embedding_size)
+        self.layer_normalization = nn.LayerNorm(embedding_size,eps=1e-12)
         self.dropout_layer = nn.Dropout(hidden_dropout)
 
     def forward(self,inputs):
@@ -218,9 +222,9 @@ class Transformer(nn.Module):
         self.dense0 = nn.Linear(embedding_size,embedding_size)
         self.dropout0 = nn.Dropout(attention_probs_dropout_prob)
         self.layer_norm0 = nn.LayerNorm(embedding_size,eps=1e-12)
-        self.dense = nn.Linear(embedding_size,embedding_size)
+        self.dense = nn.Linear(embedding_size,intermediate_size)
         self.activation = get_activation(hidden_act)
-        self.dense1 = nn.Linear(embedding_size,embedding_size)
+        self.dense1 = nn.Linear(intermediate_size,embedding_size)
         self.dropout1 = nn.Dropout(attention_probs_dropout_prob)
         self.layer_norm1 = nn.LayerNorm(embedding_size,eps=1e-12)
         
