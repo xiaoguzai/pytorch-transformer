@@ -27,7 +27,7 @@ def load_bert_data(model,resolved_archive_file):
            'bert_pooler.bias':'bert.pooler.dense.bias'
         }
         #由自己的权重名称去找原先的权重名称
-        for layer_ndx in range(model.num_layers):
+        for layer_ndx in range(model.config.num_layers):
             transformer_dicts.update({
                 'bert_encoder_layer.%d.attention.query_layer.weight'%(layer_ndx):'bert.encoder.layer.%d.attention.self.query.weight'%(layer_ndx),
                 #注意中间有冒号，两边要分开进行赋值
