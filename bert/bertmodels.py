@@ -40,8 +40,8 @@ class Config(object):
                 max_relative_position = 64,
                 with_pooler = True,
                 max_position_embeddings = 512,
+                layer_norm_eps = 1e-12,
                 *args, **kwargs):
-        self.initializer_range = initializer_range
         self.initializer_range = initializer_range#1
         self.embedding_size = embedding_size#4
         self.project_embeddings_with_bias = project_embeddings_with_bias#5
@@ -75,6 +75,7 @@ class Config(object):
         self.max_relative_position = max_relative_position
         self.with_pooler = with_pooler
         self.hidden_act = hidden_act
+        self.layer_norm_eps = layer_norm_eps
 
 class Bert(nn.Module):
     def __init__(self,config):
@@ -94,8 +95,10 @@ class Bert(nn.Module):
         if config.with_pooler:
             self.bert_pooler = nn.Linear(config.embedding_size,config.embedding_size)
     
-    def forward(self,inputs):
-        outputs = self.bertembeddings(inputs)
+    def forward(self,input_ids,segment_ids=None,mask_ids=None):
+        if segment_ids == None:
+            segment_ids = torch.zeros_like(input_ids)
+        outputs = self.bertembeddings(input_ids,segment_ids,mask_ids)
         for layer_ndx in self.bert_encoder_layer:
             outputs = layer_ndx(outputs)
         if self.config.with_pooler:
@@ -129,16 +132,9 @@ class Embeddings(nn.Module):
         self.layer_normalization = nn.LayerNorm(config.embedding_size,eps=1e-12)
         self.dropout_layer = nn.Dropout(config.hidden_dropout)
 
-    def forward(self,inputs):
-        if inputs.size(0) == 2:
-            input_ids,segment_ids = inputs[0],inputs[1]
-            mask_ids = None
-        elif inputs.size(0) == 3:
-            input_ids,segment_ids,mask_ids = inputs[0],inputs[1],inputs[2]
-        else:
-            input_ids = inputs
-            segment_ids = torch.zeros_like(inputs)
-            mask_ids = None
+    def forward(self,input_ids,segment_ids,mask_ids=None):
+        if segment_ids == None:
+            segment_ids = torch.zeros_like(input_ids)
         seq_len = input_ids.size(1)
         #长度为(batch_size,seq_len)
         position_ids = torch.arange(seq_len,dtype=torch.long,device=input_ids.device)
@@ -174,7 +170,7 @@ class Transformer(nn.Module):
         self.layer_norm1 = nn.LayerNorm(config.embedding_size,eps=1e-12)
         
     
-    def forward(self,inputs,mask=None,**kwargs):
+    def forward(self,inputs,masks=None,**kwargs):
         residual = inputs
         embedding_output = self.attention(inputs)
         embedding_output = self.dense0(embedding_output)
