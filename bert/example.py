@@ -8,8 +8,14 @@ bert_bin_file = bert_bin_dir + "pytorch_model.bin"
 bert_config_file = bert_bin_dir + "bert_config.json"
 tokenizer = FullTokenizer(vocab_file = '/home/xiaoguzai/数据集/bert-uncased-pytorch/vocab.txt')
 from loader_bert import load_bert_data
-config = Config(vocab_size=30522,with_pooler=False)
-print(config.vocab_size)
+with open('/home/xiaoguzai/数据集/bert-uncased-pytorch/config.json','r',encoding='utf8')as fp:
+    json_data = json.load(fp)
+print(json_data)
+config = Config(**json_data)
+r"""
+test(**kwargs)** 的作用则是把字典 kwargs 变成关键字参数传递。
+比如上面这个代码，如果 kwargs 等于 {'a':1,'b':2,'c':3} ，那这个代码就等价于 test(a=1,b=2,c=3) 
+"""
 bert = Bert(config)
 #input_ids = torch.tensor([[[1,2,3,4,5]],[[0,0,0,0,0]]])
 token_id1 = tokenizer.tokenize('Replace me by any text you\'d like.')
