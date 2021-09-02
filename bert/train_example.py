@@ -151,7 +151,7 @@ from loader_bert import load_bert_data
 from tqdm import tqdm
 bert = load_bert_data(bert,bert_bin_file)
 model = ClassificationModel(bert,config,2)
-optimizer = torch.optim.Adam(model.parameters())
+optimizer = torch.optim.Adam(model.parameters(),lr=0.00001)
 loss_func = torch.nn.CrossEntropyLoss()
 for epoch in range(10):
     print('epoch {}'.format(epoch+1))
