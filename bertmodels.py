@@ -126,11 +126,6 @@ class Bert(nn.Module):
         
         for layer_ndx in self.bert_encoder_layer:
             outputs = layer_ndx(outputs)
-            print('777outputs = 777')
-            print(outputs)
-            print('7777777777777777')
-        #print('///outputs = ///')
-        #print(outputs)
         
         if self.config.with_pooler:
             outputs = self.bert_pooler(outputs)
@@ -165,7 +160,7 @@ class Embeddings(nn.Module):
         self.word_embeddings_layer = nn.Embedding(config.vocab_size,config.embedding_size)
         self.segment_embeddings_layer = nn.Embedding(config.token_type_vocab_size,config.embedding_size)
         self.position_embeddings_layer = nn.Embedding(config.max_position_embeddings,config.embedding_size)
-        self.layer_normalization = LayerNorm(config.embedding_size,variance_epsilon=1e-12)
+        self.layer_normalization = nn.LayerNorm(config.embedding_size,eps=1e-12)
         self.dropout_layer = nn.Dropout(config.hidden_dropout)
 
     def forward(self,input_ids,segment_ids,mask_ids=None):
@@ -175,15 +170,6 @@ class Embeddings(nn.Module):
         #长度为(batch_size,seq_len)
         position_ids = torch.arange(seq_len,dtype=torch.long,device=input_ids.device)
         position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
-        #print('&&&input_ids = &&&')
-        #print(input_ids)
-        #print('&&&position_ids = &&&')
-        #print(position_ids)
-        #print('&&&segment_ids = &&&')
-        #print(segment_ids)
-        #pos.unsqueeze(0)由(seq_len,)得到(1,seq_len)，
-        #接下来使用expand_as(x)由(1,seq_len)->(batch_size,seq_len)
-        #results = self.word_embeddings_layer(input_ids)
         results = self.word_embeddings_layer(input_ids)+self.segment_embeddings_layer(segment_ids)+self.position_embeddings_layer(position_ids)
         results = self.layer_normalization(results)
         results = self.dropout_layer(results)
@@ -207,7 +193,7 @@ def gelu(x):
 
 def get_activation(activation):
     if activation == 'gelu':
-        return gelu
+        return F.gelu
     elif activation == 'relu':
         return F.relu
     elif activation == 'tanh':
@@ -221,58 +207,28 @@ class Transformer(nn.Module):
         self.attention = AttentionLayer(config)
         self.dense0 = nn.Linear(config.embedding_size,config.embedding_size)
         self.dropout0 = nn.Dropout(config.attention_probs_dropout_prob)
-        self.layer_norm0 = LayerNorm(config.embedding_size,variance_epsilon=1e-12)
+        self.layer_norm0 = nn.LayerNorm(config.embedding_size,eps=1e-12)
         self.dense = nn.Linear(config.embedding_size,config.intermediate_size)
         self.activation = get_activation(config.hidden_act)
         self.dense1 = nn.Linear(config.intermediate_size,config.embedding_size)
         self.dropout1 = nn.Dropout(config.attention_probs_dropout_prob)
-        self.layer_norm1 = LayerNorm(config.embedding_size,variance_epsilon=1e-12)
+        self.layer_norm1 = nn.LayerNorm(config.embedding_size,eps=1e-12)
         
     
     def forward(self,inputs,masks=None,**kwargs):
         residual = inputs
         embedding_output = inputs
-        
         embedding_output = self.attention(inputs)
-        
-        #print('transformer1111111111111')
-        #print(embedding_output)
-        #print('111111111111111111111111')
-        
         embedding_output = self.dense0(embedding_output)
-        #print('transformer2222222222222')
-        #print(embedding_output)
-        #print('222222222222222222222222')
         embedding_output = self.dropout0(embedding_output)
-        #print('trainsformer333333333333')
-        #print(embedding_output)
-        #print('333333333333333333333333')
         
         embedding_output = self.layer_norm0(residual+embedding_output)
-        #print('transformer4444444444444')
-        #print(embedding_output)
-        #print('444444444444444444444444')
         residual = embedding_output
         embedding_output = self.dense(embedding_output)
-        #print('trainsformer555555555555')
-        #print(embedding_output)
-        #print('555555555555555555555555')
         embedding_output = self.activation(embedding_output)
-        #print('trainsformer666666666666')
-        #print(embedding_output)
-        #print('666666666666666666666666')
         embedding_output = self.dense1(embedding_output)
-        #print('trainsformer777777777777')
-        #print(embedding_output)
-        #print('777777777777777777777777')
         embedding_output = self.dropout1(embedding_output)
-        #print('trainsformer888888888888')
-        #print(embedding_output)
-        #print('888888888888888888888888')
         embedding_output = self.layer_norm1(residual+embedding_output)
-        #print('trainsformer999999999999')
-        #print(embedding_output)
-        #print('999999999999999999999999')
         
         return embedding_output
 
@@ -287,7 +243,11 @@ def split_last(x, shape):
 def merge_last(x, n_dims):
     "merge the last n_dims to a dimension"
     s = x.size()
+    print('s = ')
+    print(s)
     assert n_dims > 1 and n_dims < len(s)
+    print('s[:-n_dims] = ')
+    print(*s[:-n_dims])
     return x.view(*s[:-n_dims], -1)
 
 class AttentionLayer(nn.Module):
@@ -314,77 +274,22 @@ class AttentionLayer(nn.Module):
             module.bias.data.zero_()
     
     def forward(self,inputs,mask=None,**kwargs):
-        r"""
-        q, k, v = self.query_layer(inputs), self.key_layer(inputs), self.value_layer(inputs)
-        q, k, v = (split_last(x, (self.config.num_attention_heads, -1)).transpose(1, 2)
-                   for x in [q, k, v])
-        #q.shape = (16,12,128,64),k.shape = (16,12,128,64)
-        #v.shape = (16,12,128,64)
-        scores = q @ k.transpose(-2, -1) / np.sqrt(k.size(-1))
-        print('scores.shape = ')
-        print(scores.shape)
-        #scores.shape = (16,12,128,128)
-        scores = F.softmax(scores,dim=-1)
-        h = (scores @ v).transpose(1, 2).contiguous()
-        h = merge_last(h, 2)
-        return h
-        """
-        
         query = self.query_layer(inputs)
         key = self.key_layer(inputs)
         value = self.value_layer(inputs)
-        #print('attention query = ')
-        #print(query)
-        #print('attention key = ')
-        #print(key)
-        #print('attention value = ')
-        #print(value)
         batch_size,seq_len,embedding_size = inputs.size(0),inputs.size(1),inputs.size(2)
         query = query.view([batch_size,seq_len,self.config.num_attention_heads,self.config.size_per_head])
         #query = (1,5,12,64)
         query = query.permute(0,2,1,3)
         key = key.view([batch_size,seq_len,self.config.num_attention_heads,self.config.size_per_head])
         key = key.permute(0,2,1,3)
-        #print('###query = ###')
-        #print(query)
-        #print('###key = ###')
-        #print(key)
         attention_scores = torch.matmul(query,key.transpose(-1,-2))
         #attention_scores = [1,12,5,64]*[1,12,64,5] = [1,12,5,5]
         attention_scores = attention_scores/math.sqrt(float(self.config.size_per_head))
-        r"""
-        if mask is not None:
-            mask = mask[:, None, None, :].float()
-            scores -= 10000.0 * (1.0 - mask)
-        """
-        r"""
-        attention_scores = attention_scores/math.sqrt(float(self.config.size_per_head))
-        print('---attention_scores.shape = ---')
-        print(attention_scores.shape)
-        print('-------------------------------')
-        """
-        r"""
-        if self.mode == 'unilm':
-            if self.solution == 'seq2seq':
-                bias_data = self.seq2seq_compute_attention_bias(segment_ids)
-                #当批次为128的时候，bias_data = (1,128,128)
-                #attention_scores = attention_scores+bias_data[:,None,:,:]
-                attention_scores = attention_scores+bias_data[:,None,:,:]
-                #(5,12,128,128)+(5,128,128) = (5,12,128,128)
-            elif self.solution == 'lefttoright':
-                bias_data = self.lefttoright_compute_attention_bias(segment_ids)
-                attention_scores = attention_scores+bias_data
-         """
-        #attention_scores = F.softmax(attention_scores,dim=-1)
-        
-        attention_scores = F.softmax(attention_scores)
-        #attention_scores = self.dropout(attention_scores)
+        attention_scores = F.softmax(attention_scores,dim=-1)
         value = value.view(batch_size,seq_len,self.config.num_attention_heads,self.config.size_per_head)
         value = value.permute(0,2,1,3)
         context_layer = torch.matmul(attention_scores,value)
         context_layer = context_layer.permute(0,2,1,3)
         context_layer = context_layer.contiguous().view(batch_size,seq_len,self.config.num_attention_heads*self.config.size_per_head)
-        #print(context_layer)
-        #print('$$$$$$$$$$$$$$$$$$$$$$')
-        
         return context_layer
