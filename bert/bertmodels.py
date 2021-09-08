@@ -162,8 +162,6 @@ class Embeddings(nn.Module):
         #之前__init__之中少写了一个self,报错multiple initialize
         #先能跑通一个网络层，再往里面加入网络层
         super(Embeddings, self).__init__()
-        print('###config.vocab_size = ')
-        print(config.vocab_size)
         self.word_embeddings_layer = nn.Embedding(config.vocab_size,config.embedding_size)
         self.segment_embeddings_layer = nn.Embedding(config.token_type_vocab_size,config.embedding_size)
         self.position_embeddings_layer = nn.Embedding(config.max_position_embeddings,config.embedding_size)
@@ -200,7 +198,7 @@ def gelu(x):
 
 def get_activation(activation):
     if activation == 'gelu':
-        return gelu
+        return F.gelu
     elif activation == 'relu':
         return F.relu
     elif activation == 'tanh':
@@ -225,47 +223,17 @@ class Transformer(nn.Module):
     def forward(self,inputs,masks=None,**kwargs):
         residual = inputs
         embedding_output = inputs
-        
         embedding_output = self.attention(inputs)
-        
-        #print('transformer1111111111111')
-        #print(embedding_output)
-        #print('111111111111111111111111')
-        
         embedding_output = self.dense0(embedding_output)
-        #print('transformer2222222222222')
-        #print(embedding_output)
-        #print('222222222222222222222222')
         embedding_output = self.dropout0(embedding_output)
-        #print('trainsformer333333333333')
-        #print(embedding_output)
-        #print('333333333333333333333333')
         
         embedding_output = self.layer_norm0(residual+embedding_output)
-        #print('transformer4444444444444')
-        #print(embedding_output)
-        #print('444444444444444444444444')
         residual = embedding_output
         embedding_output = self.dense(embedding_output)
-        #print('trainsformer555555555555')
-        #print(embedding_output)
-        #print('555555555555555555555555')
         embedding_output = self.activation(embedding_output)
-        #print('trainsformer666666666666')
-        #print(embedding_output)
-        #print('666666666666666666666666')
         embedding_output = self.dense1(embedding_output)
-        #print('trainsformer777777777777')
-        #print(embedding_output)
-        #print('777777777777777777777777')
         embedding_output = self.dropout1(embedding_output)
-        #print('trainsformer888888888888')
-        #print(embedding_output)
-        #print('888888888888888888888888')
         embedding_output = self.layer_norm1(residual+embedding_output)
-        #print('trainsformer999999999999')
-        #print(embedding_output)
-        #print('999999999999999999999999')
         
         return embedding_output
 
