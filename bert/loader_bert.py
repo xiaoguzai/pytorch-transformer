@@ -5,8 +5,6 @@ def load_bert_data(model,resolved_archive_file):
     if state_dict is None:
         try:
             state_dict = torch.load(resolved_archive_file, map_location="cpu")
-            print('state_dict = ')
-            print(state_dict.keys())
             #print('model state_dict = ')
             #print(model.state_dict())
             file_name = list(state_dict.keys())
@@ -21,16 +19,20 @@ def load_bert_data(model,resolved_archive_file):
            'bertembeddings.word_embeddings_layer.weight':'bert.embeddings.word_embeddings.weight',
            'bertembeddings.position_embeddings_layer.weight':'bert.embeddings.position_embeddings.weight',
            'bertembeddings.segment_embeddings_layer.weight':'bert.embeddings.token_type_embeddings.weight',
-           #'bertembeddings.layer_normalization.weight':'bert.embeddings.LayerNorm.gamma',
-           #'bertembeddings.layer_normalization.bias':'bert.embeddings.LayerNorm.beta',
+           'bertembeddings.layer_normalization.weight':'bert.embeddings.LayerNorm.gamma',
+           'bertembeddings.layer_normalization.bias':'bert.embeddings.LayerNorm.beta',
            'bertembeddings.layer_normalization.gamma':'bert.embeddings.LayerNorm.gamma',
            'bertembeddings.layer_normalization.beta':'bert.embeddings.LayerNorm.beta',
+           'bertembeddings.layer_normalization.weight':'bert.embeddings.LayerNorm.weight',
+           'bertembeddings.layer_normalization.bias':'bert.embeddings.LayerNorm.bias',
            'bert_pooler.weight':'bert.pooler.dense.weight',
            'bert_pooler.bias':'bert.pooler.dense.bias',
            'mlm_dense0.weight':'cls.predictions.transform.dense.weight',
            'mlm_dense0.bias':'cls.predictions.transform.dense.bias',
            'mlm_norm.gamma':'cls.predictions.transform.LayerNorm.gamma',
            'mlm_norm.beta':'cls.predictions.transform.LayerNorm.beta',
+           'mlm_norm.weight':'cls.predictions.transform.LayerNorm.gamma',
+           'mlm_norm.bias':'cls.predictions.transform.LayerNorm.beta',
            'mlm_dense1.weight':'bert.embeddings.word_embeddings.weight',
            'mlm_dense1.bias':'cls.predictions.bias'
         }
@@ -47,20 +49,24 @@ def load_bert_data(model,resolved_archive_file):
                 
                 'bert_encoder_layer.%d.dense0.weight'%(layer_ndx):'bert.encoder.layer.%d.attention.output.dense.weight'%(layer_ndx),
                 'bert_encoder_layer.%d.dense0.bias'%(layer_ndx):'bert.encoder.layer.%d.attention.output.dense.bias'%(layer_ndx),
-                #'bert_encoder_layer.%d.layer_norm0.weight'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.gamma'%(layer_ndx),
-                #'bert_encoder_layer.%d.layer_norm0.bias'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.beta'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm0.weight'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.gamma'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm0.bias'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.beta'%(layer_ndx),
                 'bert_encoder_layer.%d.layer_norm0.gamma'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.gamma'%(layer_ndx),
                 'bert_encoder_layer.%d.layer_norm0.beta'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.beta'%(layer_ndx),
+                 'bert_encoder_layer.%d.layer_norm0.weight'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.weight'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm0.bias'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.bias'%(layer_ndx),
                 
                 'bert_encoder_layer.%d.dense.weight'%(layer_ndx):'bert.encoder.layer.%d.intermediate.dense.weight'%(layer_ndx),
                 'bert_encoder_layer.%d.dense.bias'%(layer_ndx):'bert.encoder.layer.%d.intermediate.dense.bias'%(layer_ndx),
 
                 'bert_encoder_layer.%d.dense1.weight'%(layer_ndx):'bert.encoder.layer.%d.output.dense.weight'%(layer_ndx),
                 'bert_encoder_layer.%d.dense1.bias'%(layer_ndx):'bert.encoder.layer.%d.output.dense.bias'%(layer_ndx),
-                #'bert_encoder_layer.%d.layer_norm1.weight'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.gamma'%(layer_ndx),
-                #'bert_encoder_layer.%d.layer_norm1.bias'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.beta'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm1.weight'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.gamma'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm1.bias'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.beta'%(layer_ndx),
                 'bert_encoder_layer.%d.layer_norm1.gamma'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.gamma'%(layer_ndx),
-                'bert_encoder_layer.%d.layer_norm1.beta'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.beta'%(layer_ndx)
+                'bert_encoder_layer.%d.layer_norm1.beta'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.beta'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm1.weight'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.weight'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm1.bias'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.bias'%(layer_ndx),
             })
         model_name = model.state_dict().keys()
         weight_value_tuples = []
@@ -73,9 +79,10 @@ def load_bert_data(model,resolved_archive_file):
             if stock_name in file_name:
                 stock_value = state_dict[stock_name]
                 param_value = model_dict[param_name]
-                shape1 = param_value.shape[0]
                 if stock_name == 'bert.embeddings.word_embeddings.weight':
-                     stock_value = stock_value[:param_value.shape[0]]
+                    stock_value = stock_value[:param_value.shape[0]]
+                if param_name == 'mlm_dense1.bias':
+                    stock_value = stock_value[:param_value.shape[0]]
                 if param_name == 'mlm_dense1.weight':
                      stock_value = stock_value.permute(0,1)
                 if param_value.shape != stock_value.shape:
