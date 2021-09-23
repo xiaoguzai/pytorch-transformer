@@ -425,9 +425,13 @@ class WordpieceTokenizer(object):
                         break
                     end -= 1
                 if cur_substr is None:
+                    #没找到对应的substr
                     is_bad = True
                     break
                 sub_tokens.append(cur_substr)
+                #if cur_substr in ['\uff01','\uff0c','\uff1f','\u3002']:
+                #找到并添加[SEP]间隔标识
+                #sub_tokens.append("[SEP]")
                 start = end
 
             if is_bad:
