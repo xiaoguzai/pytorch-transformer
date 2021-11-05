@@ -77,3 +77,12 @@ def extract_every_matching(texts, summaries):
         j = np.argmax([compute_main_metric(t,summaries[index],'char') for t in texts])
         results.append((index,j))
     return results
+
+def sequence_padding(inputs,maxlen,padding = 0):
+    length = maxlen
+    if len(inputs) > length:
+        inputs = inputs[:length]
+    outputs = []
+    pad_width = (0,length-len(inputs))
+    x = np.pad(inputs,pad_width,'constant',constant_values=padding)
+    return x
