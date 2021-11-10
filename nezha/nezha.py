@@ -116,15 +116,16 @@ class Bert(nn.Module):
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
     
-    def forward(self,input_ids,segment_ids=None,mask_ids=None):
+    def forward(self,input_ids,segment_ids=None):
         if segment_ids == None:
             segment_ids = torch.zeros_like(input_ids)
         #print('^^^input_ids = ^^^')
         #print(input_ids)
-        outputs = self.bertembeddings(input_ids,segment_ids,mask_ids)
+        mask_ids = torch.not_equal(input_ids,0)
+        outputs = self.bertembeddings(input_ids,segment_ids)
         #outputs = self.bert_encoder_layer[0](outputs)
         for layer_ndx in self.bert_encoder_layer:
-            outputs = layer_ndx(outputs)
+            outputs = layer_ndx(outputs,mask_ids)
             #print('outputs1 = ')
             #print(outputs)
         if self.config.with_pooler:
@@ -166,13 +167,12 @@ class Embeddings(nn.Module):
         self.layer_normalization = nn.LayerNorm(config.embedding_size,eps=1e-12)
         self.dropout_layer = nn.Dropout(config.hidden_dropout)
 
-    def forward(self,input_ids,segment_ids,mask_ids=None):
+    def forward(self,input_ids,segment_ids):
         if segment_ids == None:
             segment_ids = torch.zeros_like(input_ids)
         seq_len = input_ids.size(1)
         #长度为(batch_size,seq_len)
         position_ids = torch.arange(seq_len,dtype=torch.long,device=input_ids.device)
-        position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
         results = self.word_embeddings_layer(input_ids)+self.segment_embeddings_layer(segment_ids)
         results = self.layer_normalization(results)
         results = self.dropout_layer(results)
@@ -221,7 +221,7 @@ class Transformer(nn.Module):
     def forward(self,inputs,masks=None,**kwargs):
         residual = inputs
         embedding_output = inputs
-        embedding_output = self.attention(inputs)
+        embedding_output = self.attention(inputs,masks)
         embedding_output = self.dense0(embedding_output)
         embedding_output = self.dropout0(embedding_output)
         
@@ -376,7 +376,7 @@ class AttentionLayer(nn.Module):
         #attention_scores = [1,12,5,64]*[1,12,64,5] = [1,12,5,5]
         if mask is not None:
             mask = mask[:, None, None, :].float()
-            scores -= 10000.0 * (1.0 - mask)
+            attention_scores -= 1e-12 * (1.0 - mask)
         
         self.relative_positions_encoding = self.relative_positions_encoding[:seq_len,:seq_len,:]
         #self.relative_positions_encoding = (5,5,12)
