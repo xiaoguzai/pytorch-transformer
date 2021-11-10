@@ -2,3 +2,4 @@
 1.与模型有关，与其他因素目前尚未发现关联2.之前只玩了一个epoch，有的时候多玩几个epoch才能看出效果，一个epoch输出的标签全部相同是有可能的
 3.正确的训练过程在correct_train.py的文件之中
 bert mask part need updating
+**注意输入部分需要在embedding网络层之中加入mask部分**
