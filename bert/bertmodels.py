@@ -27,6 +27,7 @@ class Config(object):
                 #获取对应的切分分割字符内容
                 directionality = 'bidi',
                 pooler_fc_size = 768,
+                hidden_size = 1024,
                 pooler_num_attention_heads = 12,
                 pooler_num_fc_layers = 3,
                 pooler_size_per_head = 128,
@@ -38,12 +39,14 @@ class Config(object):
                 #max_relative_position = 512,
                 solution = 'seq2seq',
                 max_relative_position = 64,
-                with_pooler = True,
+                with_pooler = False,
                 max_position_embeddings = 512,
                 layer_norm_eps = 1e-12,
+                num_hidden_layers = 12,
                 *args, **kwargs):
         self.initializer_range = initializer_range#1
         self.embedding_size = embedding_size#4
+        self.embedding_size = hidden_size
         self.project_embeddings_with_bias = project_embeddings_with_bias#5
         self.vocab_size = vocab_size#6
         self.token_type_vocab_size = 2#9
@@ -54,8 +57,8 @@ class Config(object):
         self.adapter_size = adapter_size#14
         self.adapter_init_scale = adapter_init_scale#16
         self.num_attention_heads = num_attention_heads#17注意力头数，需指定
-        assert embedding_size%num_attention_heads == 0,"size_per_head必须能够整除num_attention_heads"
-        self.size_per_head = embedding_size//num_attention_heads#18
+        assert hidden_size%num_attention_heads == 0,"size_per_head必须能够整除num_attention_heads"
+        self.size_per_head = hidden_size//num_attention_heads#18
         self.attention_probs_dropout_prob = attention_probs_dropout_prob#22
         self.negative_infinity = negative_infinity#23
         self.intermediate_size = intermediate_size#24
@@ -76,6 +79,7 @@ class Config(object):
         self.with_pooler = with_pooler
         self.hidden_act = hidden_act
         self.layer_norm_eps = layer_norm_eps
+        self.num_layers = num_hidden_layers
 
 class Bert(nn.Module):
     def __init__(self,config):
@@ -96,7 +100,7 @@ class Bert(nn.Module):
             self.bert_pooler = nn.Linear(config.embedding_size,config.embedding_size)
         if config.with_mlm:
             self.mlm_dense0 = nn.Linear(config.embedding_size,config.embedding_size)
-            self.mlm_norm = LayerNorm(config.embedding_size,variance_epsilon=1e-12)
+            self.mlm_norm = nn.LayerNorm(config.embedding_size,eps=1e-12)
             self.mlm_dense1 = nn.Linear(config.embedding_size,config.vocab_size)
         #print('self.config.initializer_range = ')
         #print(self.config.initializer_range)
@@ -116,29 +120,28 @@ class Bert(nn.Module):
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
     
-    def forward(self,input_ids,segment_ids=None,mask_ids=None):
+    def forward(self,input_ids,segment_ids=None):
         if segment_ids == None:
             segment_ids = torch.zeros_like(input_ids)
         #print('^^^input_ids = ^^^')
         #print(input_ids)
-        outputs = self.bertembeddings(input_ids,segment_ids,mask_ids)
+        mask_ids = torch.not_equal(input_ids,0)
+        outputs = self.bertembeddings(input_ids,segment_ids)
         #outputs = self.bert_encoder_layer[0](outputs)
-        
         for layer_ndx in self.bert_encoder_layer:
-            outputs = layer_ndx(outputs)
-            #print('777outputs = 777')
+            outputs = layer_ndx(outputs,mask_ids)
+            #print('outputs1 = ')
             #print(outputs)
-            #print('7777777777777777')
-        #print('///outputs = ///')
-        #print(outputs)
-        
         if self.config.with_pooler:
             outputs = self.bert_pooler(outputs)
+        #print('outputs2 = ')
+        #print(outputs)
         if self.config.with_mlm:
             outputs = self.mlm_dense0(outputs)
             outputs = self.mlm_norm(outputs)
             outputs = self.mlm_dense1(outputs)
-        
+        #print('outputs3 = ')
+        #print(outputs)
         return outputs
 
 class LayerNorm(nn.Module):
@@ -165,7 +168,7 @@ class Embeddings(nn.Module):
         self.word_embeddings_layer = nn.Embedding(config.vocab_size,config.embedding_size)
         self.segment_embeddings_layer = nn.Embedding(config.token_type_vocab_size,config.embedding_size)
         self.position_embeddings_layer = nn.Embedding(config.max_position_embeddings,config.embedding_size)
-        self.layer_normalization = LayerNorm(config.embedding_size,variance_epsilon=1e-12)
+        self.layer_normalization = nn.LayerNorm(config.embedding_size,eps=1e-12)
         self.dropout_layer = nn.Dropout(config.hidden_dropout)
 
     def forward(self,input_ids,segment_ids,mask_ids=None):
@@ -212,18 +215,18 @@ class Transformer(nn.Module):
         self.attention = AttentionLayer(config)
         self.dense0 = nn.Linear(config.embedding_size,config.embedding_size)
         self.dropout0 = nn.Dropout(config.attention_probs_dropout_prob)
-        self.layer_norm0 = LayerNorm(config.embedding_size,variance_epsilon=1e-12)
+        self.layer_norm0 = nn.LayerNorm(config.embedding_size,eps=1e-12)
         self.dense = nn.Linear(config.embedding_size,config.intermediate_size)
         self.activation = get_activation(config.hidden_act)
         self.dense1 = nn.Linear(config.intermediate_size,config.embedding_size)
         self.dropout1 = nn.Dropout(config.attention_probs_dropout_prob)
-        self.layer_norm1 = LayerNorm(config.embedding_size,variance_epsilon=1e-12)
+        self.layer_norm1 = nn.LayerNorm(config.embedding_size,eps=1e-12)
         
     
     def forward(self,inputs,masks=None,**kwargs):
         residual = inputs
         embedding_output = inputs
-        embedding_output = self.attention(inputs)
+        embedding_output = self.attention(inputs,masks)
         embedding_output = self.dense0(embedding_output)
         embedding_output = self.dropout0(embedding_output)
         
@@ -290,6 +293,10 @@ class AttentionLayer(nn.Module):
         key = key.permute(0,2,1,3)
         attention_scores = torch.matmul(query,key.transpose(-1,-2))
         #attention_scores = [1,12,5,64]*[1,12,64,5] = [1,12,5,5]
+        if mask is not None:
+            mask = mask[:,None,None,:].float()
+            attention_scores -= 1e-12 * (1.0-mask)
+
         attention_scores = attention_scores/math.sqrt(float(self.config.size_per_head))
         attention_scores = F.softmax(attention_scores,dim=-1)
         value = value.view(batch_size,seq_len,self.config.num_attention_heads,self.config.size_per_head)
