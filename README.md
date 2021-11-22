@@ -1,33 +1,30 @@
-# pythonicforbert源码及调用过程
-需要的框架：pytorch>=1.4.0(差不多1.5以上都可以使用，我的版本是1.7.1,版本太低可能会出现兼容性问题)
-安装步骤
-```
-pip install pythonicforbert
-```
-最简单的模型示例
-```python
 import torch
 #from tokenization import FullTokenizer
 #from bertmodels import Bert
 from pythonicforbert import FullTokenizer
-from pythonicforbert import Bert,BertConfig
-from pythonicforbert import load_bert_base_data
+#from pythonicforbert import Bert,BertConfig
+
+from pythonicforbert import get_data_function,get_model_function
 import json
 bert_bin_dir="/home/xiaoguzai/模型/bert-base/"
 bert_bin_file = bert_bin_dir + "pytorch_model.bin"
 bert_config_file = bert_bin_dir + "config.json"
 tokenizer = FullTokenizer(vocab_file = bert_bin_dir+'vocab.txt')
+bertmodel,bertconfig = get_model_function('bert-base')
+get_data = get_data_function('bert-base')
+
 
 with open(bert_config_file,'r',encoding='utf8')as fp:
     json_data = json.load(fp)
 print(json_data)
-config = BertConfig(**json_data)
+
+config = bertconfig(**json_data)
+bert = bertmodel(config)
+bertmodel = get_data(bert,bert_bin_file)
 r"""
 test(**kwargs)** 的作用则是把字典 kwargs 变成关键字参数传递。
 比如上面这个代码，如果 kwargs 等于 {'a':1,'b':2,'c':3} ，那这个代码就等价于 test(a=1,b=2,c=3) 
 """
-bert = Bert(config)
-#input_ids = torch.tensor([[[1,2,3,4,5]],[[0,0,0,0,0]]])
 token_id1 = tokenizer.tokenize('Replace me by any text you\'d like.')
 token_id1 = ["[CLS]"]+token_id1+["[SEP]"]
 token_id1 = tokenizer.convert_tokens_to_ids(token_id1)
@@ -46,4 +43,3 @@ tensor([[[ 0.1386,  0.1583, -0.2967,  ..., -0.2708, -0.2844,  0.4581],
          [-0.0252, -0.7177, -0.6950,  ...,  0.0757, -0.6668, -0.3401],
          [ 0.7535,  0.2391,  0.0717,  ...,  0.2467, -0.6458, -0.3213]]]
 """
-```
