@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import json
 import math
-class Config(object):
+class NezhaConfig(object):
     def __init__(self,
                 initializer_range=0.02,#1
                 embedding_size=768,#4
@@ -77,7 +77,7 @@ class Config(object):
         self.hidden_act = hidden_act
         self.layer_norm_eps = layer_norm_eps
 
-class Bert(nn.Module):
+class Nezha(nn.Module):
     def __init__(self,config):
         #这里初步先将所有的参数都放入__init__之中
         #后期可以将不需要更改的参数放入build函数之中
@@ -381,7 +381,7 @@ class AttentionLayer(nn.Module):
         self.relative_positions_encoding = self.relative_positions_encoding[:seq_len,:seq_len,:]
         #self.relative_positions_encoding = (5,5,12)
         self.relative_positions_encoding = torch.as_tensor(self.relative_positions_encoding)
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        device = query.device
         self.relative_positions_encoding = self.relative_positions_encoding.to(device)
         query = query.permute(2,0,1,3)
         #query = (12,1,5,64)
