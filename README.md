@@ -1,3 +1,9 @@
+安装
+```
+pip install pythonicforbert
+```
+一个简单的例子
+```python
 import torch
 #from tokenization import FullTokenizer
 #from bertmodels import Bert
@@ -43,3 +49,4 @@ tensor([[[ 0.1386,  0.1583, -0.2967,  ..., -0.2708, -0.2844,  0.4581],
          [-0.0252, -0.7177, -0.6950,  ...,  0.0757, -0.6668, -0.3401],
          [ 0.7535,  0.2391,  0.0717,  ...,  0.2467, -0.6458, -0.3213]]]
 """
+```
