@@ -1,4 +1,5 @@
 import torch
+import copy
 def load_bert_data(model,resolved_archive_file):
     state_dict = None
     if state_dict is None:
@@ -16,8 +17,11 @@ def load_bert_data(model,resolved_archive_file):
                     name_list[-1] = 'bias'
                 new_name = '.'.join(name_list)
                 if new_name != origin_name:
-                    state_dict[new_name] = state_dict[origin_name]
-				
+                    state_dict[new_name] = copy.deepcopy(state_dict[origin_name])
+                    del state_dict[origin_name]
+
+            file_name = list(state_dict.keys())
+            #后面是根据file_name来寻找的，所以一定要重新设定file_name
             model_dict = model.state_dict()
         except Exception:
             raise OSError(
@@ -103,7 +107,7 @@ def load_bert_data(model,resolved_archive_file):
                 skip_count += 1
 
     model.load_state_dict(model_dict)
-    print("Done loading {} NEZHA weights from: {}. "
+    print("Done loading {} BERT weights from: {}. "
           "Count of weights not found in the checkpoint was: [{}]. "
           "Count of weights with mismatched shape: [{}]".format(
               len(weight_value_tuples), resolved_archive_file,skip_count, len(skipped_weight_value_tuples)))
