@@ -5,6 +5,5 @@
 # @File    : __init__.py.py
 # @github  : https://github.com/xiaoguzai
 
-from .loader_bert_base import load_bert_base_data
-from .loader_bert_wwm import load_bert_wwm_data
+from .loader_bert import load_bert_data
 from .bert import BertConfig,Bert

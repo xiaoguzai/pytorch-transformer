@@ -1,17 +1,27 @@
 import torch
 def load_bert_data(model,resolved_archive_file):
-    print('!!!load Pytorch model!!!')
     state_dict = None
     if state_dict is None:
         try:
             state_dict = torch.load(resolved_archive_file, map_location="cpu")
-            #print('model state_dict = ')
-            #print(model.state_dict())
             file_name = list(state_dict.keys())
+            #这里修改ordered_dict加入新的内容,如果有gamma,beta的情况转换为
+            #weight,bias的情况
+            for name in file_name:
+                origin_name = name
+                name_list = name.split('.')
+                if name_list[-1] == 'gamma':
+                    name_list[-1] = 'weight'
+                elif name_list[-1] == 'beta':
+                    name_list[-1] = 'bias'
+                new_name = '.'.join(name_list)
+                if new_name != origin_name:
+                    state_dict[new_name] = state_dict[origin_name]
+				
             model_dict = model.state_dict()
         except Exception:
             raise OSError(
-                f"Unable to load weights from pytorch checkpoint file for '{pretrained_model_name_or_path}' "
+                f"Unable to load weights from pytorch checkpoint file for bert"
                 f"at '{resolved_archive_file}'"
                 "If you tried to load a PyTorch model from a TF 2.0 checkpoint, please set from_tf=True. "
             )
@@ -19,20 +29,18 @@ def load_bert_data(model,resolved_archive_file):
            'bertembeddings.word_embeddings_layer.weight':'bert.embeddings.word_embeddings.weight',
            'bertembeddings.position_embeddings_layer.weight':'bert.embeddings.position_embeddings.weight',
            'bertembeddings.segment_embeddings_layer.weight':'bert.embeddings.token_type_embeddings.weight',
-           'bertembeddings.layer_normalization.weight':'bert.embeddings.LayerNorm.gamma',
-           'bertembeddings.layer_normalization.bias':'bert.embeddings.LayerNorm.beta',
-           'bertembeddings.layer_normalization.gamma':'bert.embeddings.LayerNorm.gamma',
-           'bertembeddings.layer_normalization.beta':'bert.embeddings.LayerNorm.beta',
            'bertembeddings.layer_normalization.weight':'bert.embeddings.LayerNorm.weight',
            'bertembeddings.layer_normalization.bias':'bert.embeddings.LayerNorm.bias',
+           'bertembeddings.layer_normalization.gamma':'bert.embeddings.LayerNorm.weight',
+           'bertembeddings.layer_normalization.beta':'bert.embeddings.LayerNorm.bias',
            'bert_pooler.weight':'bert.pooler.dense.weight',
            'bert_pooler.bias':'bert.pooler.dense.bias',
            'mlm_dense0.weight':'cls.predictions.transform.dense.weight',
            'mlm_dense0.bias':'cls.predictions.transform.dense.bias',
-           'mlm_norm.gamma':'cls.predictions.transform.LayerNorm.gamma',
-           'mlm_norm.beta':'cls.predictions.transform.LayerNorm.beta',
-           'mlm_norm.weight':'cls.predictions.transform.LayerNorm.gamma',
-           'mlm_norm.bias':'cls.predictions.transform.LayerNorm.beta',
+           'mlm_norm.weight':'cls.predictions.transform.LayerNorm.weight',
+           'mlm_norm.bias':'cls.predictions.transform.LayerNorm.bias',
+           'mlm_norm.gamma':'cls.predictions.transform.LayerNorm.weight',
+           'mlm_norm.beta':'cls.predictions.transform.LayerNorm.bias',
            'mlm_dense1.weight':'bert.embeddings.word_embeddings.weight',
            'mlm_dense1.bias':'cls.predictions.bias'
         }
@@ -49,24 +57,20 @@ def load_bert_data(model,resolved_archive_file):
                 
                 'bert_encoder_layer.%d.dense0.weight'%(layer_ndx):'bert.encoder.layer.%d.attention.output.dense.weight'%(layer_ndx),
                 'bert_encoder_layer.%d.dense0.bias'%(layer_ndx):'bert.encoder.layer.%d.attention.output.dense.bias'%(layer_ndx),
-                'bert_encoder_layer.%d.layer_norm0.weight'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.gamma'%(layer_ndx),
-                'bert_encoder_layer.%d.layer_norm0.bias'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.beta'%(layer_ndx),
-                'bert_encoder_layer.%d.layer_norm0.gamma'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.gamma'%(layer_ndx),
-                'bert_encoder_layer.%d.layer_norm0.beta'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.beta'%(layer_ndx),
-                 'bert_encoder_layer.%d.layer_norm0.weight'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.weight'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm0.weight'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.weight'%(layer_ndx),
                 'bert_encoder_layer.%d.layer_norm0.bias'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.bias'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm0.gamma'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.weight'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm0.beta'%(layer_ndx):'bert.encoder.layer.%d.attention.output.LayerNorm.bias'%(layer_ndx),
                 
                 'bert_encoder_layer.%d.dense.weight'%(layer_ndx):'bert.encoder.layer.%d.intermediate.dense.weight'%(layer_ndx),
                 'bert_encoder_layer.%d.dense.bias'%(layer_ndx):'bert.encoder.layer.%d.intermediate.dense.bias'%(layer_ndx),
 
                 'bert_encoder_layer.%d.dense1.weight'%(layer_ndx):'bert.encoder.layer.%d.output.dense.weight'%(layer_ndx),
                 'bert_encoder_layer.%d.dense1.bias'%(layer_ndx):'bert.encoder.layer.%d.output.dense.bias'%(layer_ndx),
-                'bert_encoder_layer.%d.layer_norm1.weight'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.gamma'%(layer_ndx),
-                'bert_encoder_layer.%d.layer_norm1.bias'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.beta'%(layer_ndx),
-                'bert_encoder_layer.%d.layer_norm1.gamma'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.gamma'%(layer_ndx),
-                'bert_encoder_layer.%d.layer_norm1.beta'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.beta'%(layer_ndx),
                 'bert_encoder_layer.%d.layer_norm1.weight'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.weight'%(layer_ndx),
                 'bert_encoder_layer.%d.layer_norm1.bias'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.bias'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm1.gamma'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.weight'%(layer_ndx),
+                'bert_encoder_layer.%d.layer_norm1.beta'%(layer_ndx):'bert.encoder.layer.%d.output.LayerNorm.bias'%(layer_ndx),
             })
         model_name = model.state_dict().keys()
         weight_value_tuples = []
