@@ -1,4 +1,5 @@
 import torch
+import copy
 def load_nezha_data(model,resolved_archive_file):
     state_dict = None
     if state_dict is None:
@@ -16,12 +17,15 @@ def load_nezha_data(model,resolved_archive_file):
                     name_list[-1] = 'bias'
                 new_name = '.'.join(name_list)
                 if new_name != origin_name:
-                    state_dict[new_name] = state_dict[origin_name]
-				
+                    state_dict[new_name] = copy.deepcopy(state_dict[origin_name])
+                    del state_dict[origin_name]
+
+            file_name = list(state_dict.keys())
+            #后面是根据file_name来寻找的，所以一定要重新设定file_name
             model_dict = model.state_dict()
         except Exception:
             raise OSError(
-                f"Unable to load weights from pytorch checkpoint file for nezha "
+                f"Unable to load weights from pytorch checkpoint file for bert"
                 f"at '{resolved_archive_file}'"
                 "If you tried to load a PyTorch model from a TF 2.0 checkpoint, please set from_tf=True. "
             )
