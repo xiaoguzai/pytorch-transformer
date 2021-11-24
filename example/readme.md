@@ -1,6 +1,6 @@
 # 例子一览
 
-1.[剧本角色情感识别多折方法](https://www.datafountain.cn/competitions/518)
+1.[剧本角色情感识别训练方法](https://www.datafountain.cn/competitions/518)
 
 数据下载
 
