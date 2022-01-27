@@ -209,11 +209,6 @@ class LongFormer(nn.Module):
         is_index_masked = extended_attention_mask < 0
         is_index_global_attn = extended_attention_mask > 0
         is_global_attn = is_index_global_attn.flatten().any().item()
-        print('is_index_masked = ')
-        print(is_index_masked)
-        print('is_index_global_attn = ')
-        print(is_index_global_attn)
-        print('&&&&&&&&&&&&&&&&&&&&&&&')
         
         outputs = self.longformerembeddings(input_ids,segment_ids)
         r"""
@@ -360,11 +355,7 @@ def split_last(x, shape):
 def merge_last(x, n_dims):
     "merge the last n_dims to a dimension"
     s = x.size()
-    print('s = ')
-    print(s)
     assert n_dims > 1 and n_dims < len(s)
-    print('s[:-n_dims] = ')
-    print(*s[:-n_dims])
     return x.view(*s[:-n_dims], -1)
 
 class AttentionLayer(nn.Module):
@@ -559,133 +550,17 @@ tensor([[[[  2.2124,   4.1595,   2.5617,  ...,   2.2124,   2.2124,   1.4129],
         diagonal_attention_scores = diagonal_attention_scores.view(batch_size,num_attention_heads,seq_len,2*one_sided_attn_window_size+1).transpose(2,1)
         #diagonal_attention_scores = (2,12,512,513),transpose(2,1)之后diagonal_attention_scores = (2,512,12,513)
         #这中间的调用没有看明白，暂时先跳过去
-        
-        
-        r"""
-        diagonal_attention_scores = 
-tensor([[[[ 0.0000,  0.0000,  0.0000,  ...,  2.2124,  2.2124,  2.2124],
-          [ 0.0000,  0.0000,  0.0000,  ...,  5.6258,  5.6258,  5.6258],
-          [ 0.0000,  0.0000,  0.0000,  ...,  0.9077,  0.9077,  0.9077],
-          ...,
-          [ 0.0000,  0.0000,  0.0000,  ..., -2.6507, -2.6507, -2.6507],
-          [ 0.0000,  0.0000,  0.0000,  ...,  1.1926,  1.1926,  1.1926],
-          [ 0.0000,  0.0000,  0.0000,  ..., -5.7776, -5.7776, -5.7776]],
-        ...............................................................
-         [[ 2.2124,  2.2124,  2.2124,  ...,  0.0000,  0.0000,  0.0000],
-          [ 5.6258,  5.6258,  5.6258,  ...,  0.0000,  0.0000,  0.0000],
-          [ 0.9077,  0.9077,  0.9077,  ...,  0.0000,  0.0000,  0.0000],
-          ...,
-          [-2.6507, -2.6507, -2.6507,  ...,  0.0000,  0.0000,  0.0000],
-          [ 1.1926,  1.1926,  1.1926,  ...,  0.0000,  0.0000,  0.0000],
-          [-5.7776, -5.7776, -5.7776,  ...,  0.0000,  0.0000,  0.0000]]]])
-        """
         #beginning_mask_2d = diagonal_attention_scores.new_ones(self.one_sided_attn_window_size,self.one_sided_attn_window_size+1).tril().flip(dims=[0])
         beginning_mask_2d = diagonal_attention_scores.new_ones(one_sided_attn_window_size,one_sided_attn_window_size+1).tril().flip(dims=[0])
         beginning_mask = beginning_mask_2d[None,:,None,:]
-        r"""
-        tril返回矩阵主对角线以下的下三角矩阵，其他元素全为0，如果为多维张量时返回最后两个维度的下三角矩阵
-        tril之后的结果
-        beginning_mask_2d = 
-tensor([[1., 0., 0.,  ..., 0., 0., 0.],
-        [1., 1., 0.,  ..., 0., 0., 0.],
-        [1., 1., 1.,  ..., 0., 0., 0.],
-        ...,
-        [1., 1., 1.,  ..., 0., 0., 0.],
-        [1., 1., 1.,  ..., 1., 0., 0.],
-        [1., 1., 1.,  ..., 1., 1., 0.]])
-        torch.flip(input,dim)第一个为输入，第二个为第几维度，按照维度对输入进行翻转
-        flip之后的结果
-        beginning_mask_2d = 
-tensor([[1., 1., 1.,  ..., 1., 1., 0.],
-        [1., 1., 1.,  ..., 1., 0., 0.],
-        [1., 1., 1.,  ..., 0., 0., 0.],
-        ...,
-        [1., 1., 1.,  ..., 0., 0., 0.],
-        [1., 1., 0.,  ..., 0., 0., 0.],
-        [1., 0., 0.,  ..., 0., 0., 0.]])
-        经历了beginning_mask = beginning_mask_2d[None,:,None,:]之后的结果
-        beginning_mask = 
-tensor([[[[1., 1., 1.,  ..., 1., 1., 0.]],
-         [[1., 1., 1.,  ..., 1., 0., 0.]],
-         [[1., 1., 1.,  ..., 0., 0., 0.]],
-         ...,
-         [[1., 1., 1.,  ..., 0., 0., 0.]],
-         [[1., 1., 0.,  ..., 0., 0., 0.]],
-         [[1., 0., 0.,  ..., 0., 0., 0.]]]])
-        """
         ending_mask = beginning_mask.flip(dims=(1,3))
-        r"""
-        endding_mask = 
-        tensor([[[[0,0,0,...,0,0,1]],
-                 [[0,0,0,...,0,1,1]],
-                 ...................
-                 [[0,0,0,...,1,1,1]],
-                 [[0,0,1,...,1,1,1]],
-                 [[0,1,1,...,1,1,1]]]])
-        翻转(1,3)维度变成下三角矩阵
-        """
         #到这里的内容一致
         beginning_input = diagonal_attention_scores[:,:one_sided_attn_window_size,:,:one_sided_attn_window_size+1]
         #beginning_mask为beginning_mask_2d的一部分，所以必须先beginning_input从diagonal_attention_scores中提取出内容
         #然后再调用beginning_mask = beginning_mask.expand去扩展diagonal_attention_scores的内容
-        r"""
-        beginning_input = 
-tensor([[[[  0.0000,   0.0000,   0.0000,  ...,   0.0000,   0.0000,   2.2124],
-          [  0.0000,   0.0000,   0.0000,  ...,   0.0000,   0.0000,   5.6258],
-          [  0.0000,   0.0000,   0.0000,  ...,   0.0000,   0.0000,   0.9077],
-          .......................
-          [  0.0000,   0.0000,   0.0000,  ...,   0.0000,   0.0000,  -2.6507],
-          [  0.0000,   0.0000,   0.0000,  ...,   0.0000,   0.0000,   1.1926],
-          [  0.0000,   0.0000,   0.0000,  ...,   0.0000,   0.0000,  -5.7776]]
-          .......................
-         [[  0.0000,   2.2124,   4.1595,  ...,   2.2124,   2.2124,   2.2124],
-          [  0.0000,   5.6258,  -5.7589,  ...,   5.6258,   5.6258,   5.6258],
-          [  0.0000,   0.9077,  -0.6946,  ...,   0.9077,   0.9077,   0.9077],
-          .......................
-          [  0.0000,  -2.6507,   0.5408,  ...,  -2.6507,  -2.6507,  -2.6507],
-          [  0.0000,   1.1926,   2.1505,  ...,   1.1926,   1.1926,   1.1926],
-          [  0.0000,  -5.7776,  10.2855,  ...,  -5.7776,  -5.7776,  -5.7776]]]])
-        beginning_input = torch.size([2,256,12,257])
-        """
         beginning_mask = beginning_mask.expand(beginning_input.size())
         #beginning_mask = torch.tensor([1,256,1,257])
-        r"""
-        beginning_mask = 
-tensor([[[[1., 1., 1.,  ..., 1., 1., 0.],
-          [1., 1., 1.,  ..., 1., 1., 0.],
-          [1., 1., 1.,  ..., 1., 1., 0.],
-          ...,
-          [1., 1., 1.,  ..., 1., 1., 0.],
-          [1., 1., 1.,  ..., 1., 1., 0.],
-          [1., 1., 1.,  ..., 1., 1., 0.]],
-          ...............................
-         [[1., 0., 0.,  ..., 0., 0., 0.],
-          [1., 0., 0.,  ..., 0., 0., 0.],
-          [1., 0., 0.,  ..., 0., 0., 0.],
-          ...,
-          [1., 0., 0.,  ..., 0., 0., 0.],
-          [1., 0., 0.,  ..., 0., 0., 0.],
-          [1., 0., 0.,  ..., 0., 0., 0.]]]])
-        """
         beginning_input.masked_fill_(beginning_mask == 1,-float("inf"))
-        r"""
-        beginning_input = 
-tensor([[[[    -inf,     -inf,     -inf,  ...,     -inf,     -inf,   2.2124],
-          [    -inf,     -inf,     -inf,  ...,     -inf,     -inf,   5.6258],
-          [    -inf,     -inf,     -inf,  ...,     -inf,     -inf,   0.9077],
-          ...,
-          [    -inf,     -inf,     -inf,  ...,     -inf,     -inf,  -2.6507],
-          [    -inf,     -inf,     -inf,  ...,     -inf,     -inf,   1.1926],
-          [    -inf,     -inf,     -inf,  ...,     -inf,     -inf,  -5.7776]],
-          ...................................................................
-         [[    -inf,   2.2124,   4.1595,  ...,   2.2124,   2.2124,   2.2124],
-          [    -inf,   5.6258,  -5.7589,  ...,   5.6258,   5.6258,   5.6258],
-          [    -inf,   0.9077,  -0.6946,  ...,   0.9077,   0.9077,   0.9077],
-          ...,
-          [    -inf,  -2.6507,   0.5408,  ...,  -2.6507,  -2.6507,  -2.6507],
-          [    -inf,   1.1926,   2.1505,  ...,   1.1926,   1.1926,   1.1926],
-          [    -inf,  -5.7776,  10.2855,  ...,  -5.7776,  -5.7776,  -5.7776]]]])
-        """
         ending_input = diagonal_attention_scores[:,-one_sided_attn_window_size:,:,-(one_sided_attn_window_size+1):]
         ending_mask = ending_mask.expand(ending_input.size())
         ending_input.masked_fill_(ending_mask == 1,-float("inf"))
@@ -720,8 +595,6 @@ tensor([[[[    -inf,     -inf,     -inf,  ...,     -inf,     -inf,   2.2124],
         )
         #chunked_attention_probs = (24,2,256,513)
         
-        
-        
         r"""
         下面部分实现pad and diagonalize原理
         shift every row 1 step right, converting columns into diagonals.
@@ -752,14 +625,13 @@ tensor([[[[    -inf,     -inf,     -inf,  ...,     -inf,     -inf,   2.2124],
         chunked_attention_probs = chunked_attention_probs.view(batch_size*num_heads,seq_len//one_sided_attn_window_size,one_sided_attn_window_size,3*one_sided_attn_window_size+1)
         #chunked_attention_probs = (24,2,256,769)
         chunked_attention_probs = chunked_attention_probs[0:batch_size*num_heads,0:seq_len//one_sided_attn_window_size,0:one_sided_attn_window_size,0:3*one_sided_attn_window_size]
+        #===================================================
         
         #chunked_attention_probs = chunked_attention_probs[]
         
         value = value.transpose(1,2).reshape(batch_size*num_heads,seq_len,size_per_head)
         #value.size = (2,512,12,64),transpose(1,2)之后value.size = (2,12,512,64)
         #reshape之后value = (24,512,64)
-        print('new value.size = ')
-        print(value.size())
         #new value.size = (24,512,64)
         padded_value = nn.functional.pad(value,(0,0,one_sided_attn_window_size,one_sided_attn_window_size),value=-1)
         #nn.functional.pad四维中四个元素(左填充，右填充，上填充，下填充)，数值代表填充次数
@@ -776,31 +648,8 @@ tensor([[[[    -inf,     -inf,     -inf,  ...,     -inf,     -inf,   2.2124],
         )
         #chunked_value_stride = (65536,64*256,64,1) = (65536,16384,64,1)
         chunked_value = padded_value.as_strided(size=chunked_value_size,stride=chunked_value_stride)
-        #chunked_value.size = (24,2,768,64)
-        r"""
-        原先padded_value = (24,1024,64),chunked_value_stride=(65536,64,1)
-        经过变换之后
-        chunked_value_size = (24,2,768,64),chunked_value_stride = (65536,16384,64,1)
-        然后调用chunked_value = padded_value.as_strided(size=chunked_value_size,stride=chunked_value_stride)
-        得到最后的结果(24,2,768,64)
-        因为2*768 = 1536,1536=1024*1.5,所以本质上是将1024的中间部分重复一下
-        """
-        
-        #chunked_value = (24,2,768,64)
-        #下面使用_pad_and_diagonalize函数将数组形成的列变成对角线部分的数据
-        #chunked_value = (batch_size*num_heads,seq_len//one_sided_attn_window_size,3*one_sided_attn_window_size,size_per_head)
-        chunked_value = nn.functional.pad(
-            chunked_value,(0,3*one_sided_attn_window_size+1)
-        )
-        #chunked_value = (24,2,768,833)
-        chunked_value = chunked_value.view(
-            batch_size*num_heads,seq_len//one_sided_attn_window_size,3*one_sided_attn_window_size*size_per_head
-        )
-        #view不确定长度用-1标记
-        chunked_value = chunked_value[0:batch_size*num_heads,0:seq_len//one_sided_attn_window_size,0:3*one_sided_attn_window_size*(size_per_head-1)]
-        chunked_value = chunked_value.view(batch_size*num_heads,seq_len//one_sided_attn_window_size,3*one_sided_attn_window_size,3*one_sided_attn_window_size+size_per_head)
-        chunked_value = chunked_value[0:batch_size*num_heads,0:seq_len//one_sided_attn_window_size,0:3*one_sided_attn_window_size,0:3*one_sided_attn_window_size+size_per_head-1]
-        #=================================================================
+        context = torch.matmul(chunked_attention_probs,chunked_value)
+        return context.view(batch_size,num_heads,seq_len,size_per_head).transpose(1,2)
     
     def forward(self,inputs,mask=None,is_index_masked=None,**kwargs):
         
@@ -905,137 +754,20 @@ tensor([[[[   -inf,    -inf,    -inf,  ..., -10000., -10000., -10000.]],
         attention_probs = nn.functional.softmax(
             attention_scores,dim=-1,dtype=torch.float32
         )
-        r"""
-        attention_probs = 
-tensor([[[[0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          ...,
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000]],
-
-         ...,
-
-         [[0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          ...,
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000]]],
-
-
-        [[[0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          ...,
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0000, 0.0000, 0.0000,  ..., 0.0000, 0.0000, 0.0000]],
-         ...,
-         [[0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          ...,
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000],
-          [0.0039, 0.0039, 0.0039,  ..., 0.0000, 0.0000, 0.0000]]]],
-       grad_fn=<SoftmaxBackward>)
-        is_index_masked = 
-tensor([[[[False]],
-         [[False]],
-         [[False]],
-         ...,
-         [[ True]],
-         [[ True]],
-         [[ True]]],
-        [[[False]],
-         [[False]],
-         [[False]],
-         ...,
-         [[ True]],
-         [[ True]],
-         [[ True]]]])
-        """
         attention_probs = torch.masked_fill(attention_probs,is_index_masked[:,:,None,None],0.0)
         attention_probs = attention_probs.type_as(attention_scores)
         del attention_scores
-        #这里的before_torch.masked_fill.txt与try_after_masked_fill.txt内容不同
-        r"""
-        在torch.masked_fill之前的内容
-        0.0000e+00, 0.0000e+00, 0.0000e+00, 3.1668e-01, 6.3790e-02,
-        6.1953e-01, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
-        torch.masked_fill之后的内容
-        0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
-        0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
-        当is_index_masked[:,:,None,None]中的内容为True的时候，将其mask标记为0
-        """
-        
-        r"""
-        attention_probs = 
-tensor([[[[0., 0., 0.,  ..., 0., 0., 0.],
-          [0., 0., 0.,  ..., 0., 0., 0.],
-          [0., 0., 0.,  ..., 0., 0., 0.],
-          ...,
-          [0., 0., 0.,  ..., 0., 0., 0.],
-          [0., 0., 0.,  ..., 0., 0., 0.],
-          [0., 0., 0.,  ..., 0., 0., 0.]],
-         ................
-         [[0., 0., 0.,  ..., 0., 0., 0.],
-          [0., 0., 0.,  ..., 0., 0., 0.],
-          [0., 0., 0.,  ..., 0., 0., 0.],
-          ...,
-          [0., 0., 0.,  ..., 0., 0., 0.],
-          [0., 0., 0.,  ..., 0., 0., 0.],
-          [0., 0., 0.,  ..., 0., 0., 0.]]]]
-        """
         attention_probs = nn.functional.dropout(attention_probs,p=self.config.attention_probs_dropout_prob,training=self.training)
         value = value.view(seq_len,batch_size,self.config.num_attention_heads,self.config.size_per_head).transpose(0,1)
-		
-        with open('try_before_sliding_chunks_matmul_attn_probs.txt','w') as file_obj:
-            file_obj.write(str(attention_probs))
-        with open('try_before_sliding_chunks_matmul_value.txt','w') as file_obj:
-            file_obj.write(str(value))
-        a = a+b
+
+        #到_sliding_chunks_matmul_attn_probs_value函数之前的attention_probs和self.one_sided_attn_window_size的内容相同
         attention_output = self._sliding_chunks_matmul_attn_probs_value(
             attention_probs,value,self.one_sided_attn_window_size
         )
-        r"""
-        value = 
-tensor([[[[ 0.1612,  0.0477,  0.3729,  ...,  0.1806, -0.2115, -0.2943],
-          [-0.1278, -0.1773,  0.6371,  ...,  0.2755, -0.6703,  0.4295],
-          [ 0.3846,  0.4891, -0.7721,  ..., -0.9185,  0.6020,  0.7869],
-          ...,
-          [-0.1107,  0.5448,  0.2215,  ..., -0.2280, -1.2112,  1.6581],
-          [ 0.1520,  0.2233, -0.4359,  ..., -0.0377, -1.1100,  0.4138],
-          [ 0.0183, -0.4904, -0.4106,  ..., -0.6058,  0.2308,  0.0423]],
-          ............
-         [[ 0.1612,  0.0477,  0.3729,  ...,  0.1806, -0.2115, -0.2943],
-          [-0.1278, -0.1773,  0.6371,  ...,  0.2755, -0.6703,  0.4295],
-          [ 0.3846,  0.4891, -0.7721,  ..., -0.9185,  0.6020,  0.7869],
-          ...,
-          [-0.1107,  0.5448,  0.2215,  ..., -0.2280, -1.2112,  1.6581],
-          [ 0.1520,  0.2233, -0.4359,  ..., -0.0377, -1.1100,  0.4138],
-          [ 0.0183, -0.4904, -0.4106,  ..., -0.6058,  0.2308,  0.0423]]]])
-        """
-        
-        query = query.view(batch_size*self.config.num_attention_heads,1,seq_len,self.config.size_per_head)
-        key = key.view(batch_size*self.config.num_attention_heads,1,seq_len,self.config.size_per_head)
-        #query.size = tensor([24,1,512,64]),key.size = tensor([24,1,512,64])
-        attention_scores = torch.matmul(query,key.transpose(-1,-2))
-        
-        #mask_chunked_attention_scores = 
-
-        if mask is not None:
-            mask = mask[:,None,None,:].float()
-            attention_scores -= 1e-12 * (1.0-mask)
-
-        attention_scores = attention_scores/math.sqrt(float(self.config.size_per_head))
-        attention_scores = F.softmax(attention_scores,dim=-1)
-        value = value.view(batch_size,seq_len,self.config.num_attention_heads,self.config.size_per_head)
-        value = value.permute(0,2,1,3)
-        context_layer = torch.matmul(attention_scores,value)
-        context_layer = context_layer.permute(0,2,1,3)
-        context_layer = context_layer.contiguous().view(batch_size,seq_len,self.config.num_attention_heads*self.config.size_per_head)
-        return context_layer
+        #print('000attention_output = 000')
+        #print(attention_output.size())
+        #print('0000000000000000000000000')
+        #attention_output = (2,512,12,64)
+        #attention_output = attention_output.transpose(0,1).reshape(seq_len,batch_size,self.config.embedding_size).contiguous()
+        attention_output = attention_output.reshape(batch_size,seq_len,self.config.embedding_size)
+        return attention_output
