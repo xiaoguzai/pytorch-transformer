@@ -5,7 +5,10 @@
 # @File    : __init__.py.py
 # github   : xiaoguzai
 __version__ = '0.6.0'
-from .bert import BertConfig,Bert,load_bert_base_data,load_bert_wwm_data
-from .nezha import NezhaConfig,Nezha,load_nezha_base_data
-from .roberta import RobertaConfig,Roberta,load_roberta_base_data,load_roberta_wwm_data
+from .bert import BertConfig,Bert,load_bert_data
+from .nezha import NezhaConfig,Nezha,load_nezha_data
+from .roberta import RobertaConfig,Roberta,load_roberta_data
+from .longformer import LongFormerConfig,LongFormer,load_longformer_data
 from .tokenization import FullTokenizer
+from .get_model import get_model_function
+from .loader_pretrain_weights import load_pretrain_data
