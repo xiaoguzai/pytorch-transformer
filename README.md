@@ -41,3 +41,31 @@ output_ids = bert(token_id1)
 print('output_id2 = ')
 print(output_ids)
 ```
+使用pythoicforbert调用longformer模型的例子
+```python
+import torch
+#from tokenization import FullTokenizer
+#from bertmodels import Bert
+from pythonicforbert import FullTokenizer
+from pythonicforbert import Nezha,NezhaConfig
+
+from pythonicforbert import get_model_function
+import json
+longformer_bin_file = '/home/xiaoguzai/模型/Longformer/pytorch_model.bin'
+longformer_config_file = '/home/xiaoguzai/模型/Longformer/config.json'
+LongFormerModel,LongFormerConfig,get_data = get_model_function('longformer-base')
+
+import json
+with open('/home/xiaoguzai/模型/Longformer/config.json','r',encoding='utf8')as fp:
+    json_data = json.load(fp)
+
+longformerconfig = LongFormerConfig(**json_data)
+longformer = LongFormerModel(longformerconfig)
+longformermodel = get_data(longformer,longformer_bin_file)
+#bert.eval()
+longformermodel.eval()
+
+output_ids = longformermodel(torch.tensor([[1,2,3,4,5],[1,2,3,4,5]]))
+print('output_id2 = ')
+print(output_ids)
+```
