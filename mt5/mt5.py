@@ -103,6 +103,9 @@ class MT5(nn.Module):
             decoder_ids = self._shift_right(labels)
         else:
             decoder_ids = torch.tensor([[0]])
+        print('111decoder_ids = 111')
+        print(decoder_ids)
+        print('11111111111111111111')
         print('...input_ids = ...')
         print(input_ids)
         print('..................')
@@ -161,19 +164,9 @@ class MT5(nn.Module):
         到这里的时候layer_key_value_list与cross_key_value_list的内容一致,以及output_ids内容一致!!!
         """
         #layer_key_value_list和cross_key_value_list分别保留过去六层中的layer_key_value和cross_key_value的值
-        decoder_ids = torch.tensor([[250099]])
-        self.mt5decoder.is_first_layer = False
-        output_ids,layer_key_value_list,cross_key_value_list = self.mt5decoder(input_ids=decoder_ids,encoder_output=None,\
-                                                                              past_layer_key_value_list=layer_key_value_list,past_cross_key_value_list=cross_key_value_list)
-        #第二次调用不再需要encoder_output的内容
-        print('mt5 forward')
-        print('output_ids = ')
+        print('mt5 output_ids = ')
         print(output_ids)
-        print('layer_key_value_list = ')
-        print(layer_key_value_list)
-        print('cross_key_value_list = ')
-        print(cross_key_value_list)
-        print('^^^^^^^^^^^^^^^^^^^^^^^')
+        print('11111111111111111')
         return output_ids
 
 def gelu_new(x):
@@ -483,6 +476,11 @@ tensor([[[ 1.7500e+00, -1.6719e+00,  2.4062e+00,  1.8125e+01,  2.8750e+00,
         print('xxxinput_ids = xxx')
         print(input_ids)
         print('xxxxxxxxxxxxxxxxxx')
+        print('xxxlayer_key_value_list = xxx')
+        print(layer_key_value_list)
+        print('xxxcross_key_value_list = xxx')
+        print(cross_key_value_list)
+        print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
         r"""
         if self.is_first_layer == True:
             print('final input_ids = ')
@@ -504,6 +502,7 @@ tensor([[[ 1.7500e+00, -1.6719e+00,  2.4062e+00,  1.8125e+01,  2.8750e+00,
          .....]
        ]
         """
+        print('mt5decoder return')
         #经历了第一波之后的is_first_layer的值变为False
         return input_ids,layer_key_value_list,cross_key_value_list
 
@@ -1024,7 +1023,7 @@ class MT5DecoderLayerAttention(nn.Module):
             print('```value = ```')
             print(value)
             """
-            #value的值目前不一样
+            #value的值目前不一样---past_
         
         query = query.view(batch_size,-1,self.config.num_heads,self.config.size_per_head).transpose(1,2)
         #-1的意思是这个位置让电脑帮我们计算具体的维度内容
