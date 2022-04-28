@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import copy
 r"""
                                                                DecoderLayerAttention
                                        DecoderLayerTransformers
@@ -63,40 +64,44 @@ class MT5Config(object):
         self.vocab_size = vocab_size
 
 @torch.no_grad()
-def greedy_generate(model,input_ids,labels=None):
+def greedy_generate(model,config,input_ids,labels=None,max_length = 20):
     model.eval()
     flag = 0
+    unfinished_sequences = input_ids.new(input_ids.shape[0]).fill_(1)
+    print('...unfinished_sequences = ...')
+    print(unfinished_sequences)
+    print('.............................')
+    unfinished_sequences = unfinished_sequences[:,None]
+    pad_token_id = config.pad_token_id
+    eos_token_id = config.eos_token_id
     while True:
         if flag == 0:
             result,layer_key_value_list,cross_key_value_list = model(input_ids,labels=labels)
+            result = result[:,-1,:]
+            output_id = torch.argmax(result,axis=-1)
+            decoder_ids = output_id[:,None]
+            output_id = output_id[:,None]*unfinished_sequences + pad_token_id*(1-unfinished_sequences)
+            result_id = torch.cat([input_ids,output_id],dim=-1)
+            #这里的input_id的对应值始终保持不变,decoder_ids为不断拼接的结果
+            #从而得到最终的result_id的结果
+            flag = flag+1
         else:
-            print('begin second part')
             result,layer_key_value_list,cross_key_value_list = model(input_ids,labels=decoder_ids,layer_key_value_list=layer_key_value_list,\
                                                                      cross_key_value_list=cross_key_value_list)
             #layer_key_value_list记录上一次整个decoder的过程中产生的key和value的内容
-        print('result1 = ')
-        print(result)
-        result = result[:,-1,:]
-        print('result2 = ')
-        print(result)
-        print('result.shape = ')
-        print(result.shape)
-        output_id = torch.argmax(result,axis=-1)
-        print('111output_ids = 111')
-        print(output_id)
-        result = torch.cat([result, output_id[:, None]],dim=-1)
-        #这里的input_id的对应值始终保持不变,decoder_ids为不断拼接的结果
-        decoder_ids = result[:,-1]
-        decoder_ids = output_id[:,None]
-        print('111decoder_ids = 111')
-        print(decoder_ids)
-        print('11111111111111111111')
+            result = result[:,-1,:]
+            output_id = torch.argmax(result,axis=-1)
+            decoder_ids = output_id[:,None]
+            output_id = output_id[:,None]*unfinished_sequences + pad_token_id*(1-unfinished_sequences)
+            result_id = torch.cat([result_id, output_id],dim=-1)
+            #这里的input_id的对应值始终保持不变,decoder_ids为不断拼接的结果
+            
         flag = flag+1
-        if flag == 11:
+        unfinished_sequences = unfinished_sequences.mul((decoder_ids != eos_token_id).long())
+        if unfinished_sequences.max() == 0 or flag > max_length:
             break
-    print('$$$result = $$$')
-    print(result)
-    print('$$$=========$$$')
+    print('result_id = ')
+    print(result_id)
 
 class MT5Generation(nn.Module):
     def __init__(self,config,**kwargs):
@@ -165,8 +170,6 @@ class MT5(nn.Module):
             #decoder_ids = self._shift_right(labels)
             #!!!_shift_right巧妙，表示当前计算的是下一个id的概率
             decoder_ids = labels
-            print('new decoder_ids = ')
-            print(decoder_ids)
         else:
             batch_size = input_ids.shape[0]
             decoder_ids = torch.ones((batch_size,1),dtype=torch.long,device=input_ids.device)*self.config.decoder_start_token_id
@@ -177,9 +180,6 @@ class MT5(nn.Module):
         decoder_attention_mask = decoder_ids.ne(self.config.pad_token_id).long()
         extended_decoder_attention_mask = (1.0 - decoder_attention_mask)*-10000.0
         encoderoutput,_ = self.mt5encoder(input_ids)
-        print('$$$encoderoutput = $$$')
-        print(encoderoutput)
-        print('$$$$$$$$$$$$$$$$$$$$$$')
         output_ids,layer_key_value_list,cross_key_value_list = self.mt5decoder(input_ids=decoder_ids,encoder_output=encoderoutput,\
                                                                               layer_key_value_list=layer_key_value_list,cross_key_value_list=cross_key_value_list)
         return output_ids,layer_key_value_list,cross_key_value_list
@@ -487,10 +487,6 @@ class MT5EncoderLayerAttention(nn.Module):
     def forward(self,input_ids,position_bias=None):
         #position_bias通过传递的方式，减少模型的计算过程，加快模型的运算速度
         batch_size,seq_length = input_ids.shape[:2]
-        print('mt5layerattention forward')
-        print('input_ids = ')
-        print(input_ids)
-        print('111111111111')
         query = self.query_layer(input_ids)
         key = self.key_layer(input_ids)
         value = self.value_layer(input_ids)
@@ -759,65 +755,27 @@ class MT5DecoderCrossAttention(nn.Module):
             #decoder第二个单词之后的内容时
             real_seq_length += past_key_value[0].shape[2]
             key_length += past_key_value[0].shape[2]
-            print('***key_length = ***')
-            print(key_length)
-            print('*******************')
         if encoder_output is not None:
             key_length = encoder_output.shape[1]
-            print('###key_length = ###')
-            print(key_length)
-            print('###################')
         query = self.query_layer(input_ids)
         query = query.view(batch_size,-1,self.config.num_heads,self.config.size_per_head).transpose(1,2)
         #这里input_ids与past_key_value[0]连接之前需要变换维度
-        print('...query = ...')
-        print(query)
-        print('..............')
-        print('$$$encoder_output = $$$')
-        print(encoder_output)
-        print('$$$$$$$$$$$$$$$$$$$$$$$')
         key = self.key_layer(encoder_output)
         #past_key_value[0]保存上一波的key的值        
         if past_key_value != None:
-            print('111 past_key_value = None 111')
-            #key = torch.cat([past_key_value[0],key],dim=2)
             key = past_key_value[0]
-            print('...key = ...')
-            print(key)
-            print('............')
-            print('...key.size = ...')
-            print(key.size())
-            print('.................')
-            print('begin view')
         else:
             key = key.view(batch_size,-1,self.config.num_heads,self.config.size_per_head).transpose(1,2)
         #key.size = (2,5,768)
-
-        print('...key = ...')
-        print(key.size())
-        print('............')
-        print('...encoder_output.size = ...')
-        print(encoder_output.size())
-        print('............................')
         value = self.value_layer(encoder_output)
         if past_key_value != None:
             #value = torch.cat([past_key_value[1],value],dim=2)
             value = past_key_value[1]
         else:
             value = value.view(batch_size,-1,self.config.num_heads,self.config.size_per_head).transpose(1,2)
-        print('..............')
-        print('query.size = ')
-        print(query.size())
-        print('.............')
-        print('key.size = ')
-        print(key.size())
-        print('.............')
         scores = torch.matmul(
             query,key.transpose(3,2)
         )
-        print('...scores = ...')
-        print(scores)
-        print('...............')
         if position_bias is None:
             #在decodercrossattention中使用的为全零的矩阵
             encoder_length = encoder_output.shape[1]
