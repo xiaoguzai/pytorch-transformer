@@ -68,9 +68,6 @@ def greedy_generate(model,config,input_ids,labels=None,max_length = 20):
     model.eval()
     flag = 0
     unfinished_sequences = input_ids.new(input_ids.shape[0]).fill_(1)
-    print('...unfinished_sequences = ...')
-    print(unfinished_sequences)
-    print('.............................')
     unfinished_sequences = unfinished_sequences[:,None]
     pad_token_id = config.pad_token_id
     eos_token_id = config.eos_token_id
@@ -122,12 +119,45 @@ class MT5Generation(nn.Module):
             module.weight.data.fill_(1.0)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
+     
+    def _shift_right(self,input_ids):
+        shifted_input_ids = input_ids.new_zeros(input_ids.shape)
+        shifted_input_ids[..., 1:] = input_ids[..., :-1].clone()
+        shifted_input_ids[..., 0] = self.config.decoder_start_token_id
+        assert self.config.pad_token_id is not None, "self.model.config.pad_token_id has to be defined."
+        # replace possible -100 values in labels by `pad_token_id`
+        shifted_input_ids.masked_fill_(shifted_input_ids == -100, self.config.pad_token_id)
+        assert torch.all(shifted_input_ids >= 0).item(), "Verify that `shifted_input_ids` has only positive values"
+        return shifted_input_ids
     
-    def forward(self,input_ids,labels=None,layer_key_value_list=None,cross_key_value_list=None):
-        output_ids,layer_key_value_list,cross_key_value_list = self.mt5(input_ids,labels=labels,layer_key_value_list=layer_key_value_list,\
+    def forward(self,input_ids,labels=None,generate=True,layer_key_value_list=None,cross_key_value_list=None):
+        if generate == False:
+            assert (
+                labels == None,
+            ), f"Train t5 labels cannot be None."
+            decoder_ids = self._shift_right(labels)
+        else:
+            #生成部分的内容
+            if labels == None:
+                #第一波生成
+                batch_size = input_ids.shape[0]
+                decoder_ids = torch.ones((batch_size,1),dtype=torch.long,device=input_ids.device)*self.config.decoder_start_token_id
+            else:
+                #后续波生成
+                decoder_ids = labels
+        output_ids,layer_key_value_list,cross_key_value_list = self.mt5(input_ids,labels=decoder_ids,layer_key_value_list=layer_key_value_list,\
                                                                         cross_key_value_list=cross_key_value_list)
         output_ids = self.lm_head(output_ids)
-        return output_ids,layer_key_value_list,cross_key_value_list
+        if generate == False:
+            #训练模式
+            loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
+            loss = loss_fct(output_ids.view(-1,output_ids.size(-1)), labels.view(-1))
+            #print('@@@loss = @@@')
+            #print(loss)
+            #print('@@@@@@@@@@@@@')
+            return output_ids,loss,layer_key_value_list,cross_key_value_list
+        else:
+            return output_ids,layer_key_value_list,cross_key_value_list
 
 class MT5(nn.Module):
     def __init__(self,config,**kwargs):
@@ -166,20 +196,13 @@ class MT5(nn.Module):
         return shifted_input_ids
     
     def forward(self,input_ids,labels=None,layer_key_value_list=None,cross_key_value_list=None):
-        if labels != None:
-            #decoder_ids = self._shift_right(labels)
-            #!!!_shift_right巧妙，表示当前计算的是下一个id的概率
-            decoder_ids = labels
-        else:
-            batch_size = input_ids.shape[0]
-            decoder_ids = torch.ones((batch_size,1),dtype=torch.long,device=input_ids.device)*self.config.decoder_start_token_id
-            #对于decoder_ids部分来说,decoder_start_token_id=0
-            #decoder_ids = torch.tensor([[0]])
+        decoder_ids = labels
         encoder_attention_mask = input_ids.ne(self.config.pad_token_id).long()
-        extended_attention_mask = (1.0 - encoder_attention_mask)*-10000.0
+        encoder_attention_mask = (1.0 - encoder_attention_mask)*-10000.0
+        encoder_attention_mask = encoder_attention_mask[:,None,None,:]
         decoder_attention_mask = decoder_ids.ne(self.config.pad_token_id).long()
         extended_decoder_attention_mask = (1.0 - decoder_attention_mask)*-10000.0
-        encoderoutput,_ = self.mt5encoder(input_ids)
+        encoderoutput,_ = self.mt5encoder(input_ids,encoder_attention_mask)
         output_ids,layer_key_value_list,cross_key_value_list = self.mt5decoder(input_ids=decoder_ids,encoder_output=encoderoutput,\
                                                                               layer_key_value_list=layer_key_value_list,cross_key_value_list=cross_key_value_list)
         return output_ids,layer_key_value_list,cross_key_value_list
@@ -259,13 +282,13 @@ class MT5Encoder(nn.Module):
         self.final_layer_norm = MT5LayerNorm(config.embedding_size,config.layer_norm_epsilon)
         self.final_dropout = nn.Dropout(config.dropout_rate)
         
-    def forward(self,input_ids):
+    def forward(self,input_ids,encoder_attention_mask):
         output = self.mt5encoderembeddings_layer(input_ids)
         output = self.mt5embeddingdropout(output)
         position_bias = None
         past_value_list = None
         for layer_ndx in self.mt5encoder_layer:
-            output,position_bias = layer_ndx(output,position_bias)
+            output,position_bias = layer_ndx(output,position_bias,encoder_attention_mask)
         #到这里都一样
         #!!!易错点：这里有一个final_layer_norm网络层以及一个dropout网络层
         output = self.final_layer_norm(output)
@@ -298,6 +321,12 @@ class MT5Decoder(nn.Module):
         input_ids = self.mt5embeddingdropout(input_ids)
         #input_ids = tensor([[250099]]),input_ids = tensor([[[2.1719e+00,-3.9375e+00,...]]])
         #第二波的时候关键是下面的循环调用前面的past_key_value和position_bias的部分
+        batch_size,seq_length = input_ids.size()[0],input_ids.size()[1]
+        seq_ids = torch.arange(seq_length)
+        causal_mask = seq_ids[None,None,:].repeat(batch_size,seq_length,1) <= seq_ids[None,:,None]
+        extended_attention_mask = causal_mask[:,None,:,:]
+        extended_attention_mask = extended_attention_mask.to(input_ids.dtype)
+        extended_attention_mask = (1.0-extended_attention_mask)*(-10000)
         if layer_key_value_list == None:
             layer_key_value_list = [None]*self.config.num_layers
         if cross_key_value_list == None:
@@ -311,7 +340,7 @@ class MT5Decoder(nn.Module):
             #因为前面的is_first_layer值的改变并不会引起后面的is_first_layer的值改变
             #第一次的时候layer_position_bias和cross_position_bias的值都为None
             #后续的时候layer_position_bias和cross_position_bias接着前面的继续使用
-            input_ids,past_key_value,layer_position_bias = current_decoder_layer_attention(input_ids,encoder_output,layer_key_value_list[index],layer_position_bias)
+            input_ids,past_key_value,layer_position_bias = current_decoder_layer_attention(input_ids,encoder_output,extended_attention_mask,layer_key_value_list[index],layer_position_bias)
             layer_key_value_list[index] = past_key_value
             input_ids,past_key_value,cross_position_bias = current_decoder_cross_attention(input_ids,encoder_output,cross_key_value_list[index],cross_position_bias)
             #第一波计算要单独调用的原因:没有之前的layer_key_value_list[index-1]以及cross_key_value_list[index-1]的past_key_value的信息
@@ -328,10 +357,10 @@ class MT5DecoderLayerTransformers(nn.Module):
         self.decoderlayerattention = MT5DecoderLayerAttention(config)
         self.layer_norm0 = MT5LayerNorm(config.embedding_size,eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
-    def forward(self,input_ids,encoder_output,past_key_value,position_bias):
+    def forward(self,input_ids,encoder_output,extended_attention_mask,past_key_value,position_bias):
         origin_input_ids = input_ids
         input_ids = self.layer_norm0(input_ids)
-        input_ids,past_key_value,position_bias = self.decoderlayerattention(input_ids,encoder_output,past_key_value,position_bias)
+        input_ids,past_key_value,position_bias = self.decoderlayerattention(input_ids,encoder_output,extended_attention_mask,past_key_value,position_bias)
         input_ids = origin_input_ids+self.dropout(input_ids)
         return input_ids,past_key_value,position_bias
 
@@ -374,10 +403,10 @@ class MT5EncoderTransformers(nn.Module):
         self.mt5densegatedgeludense = MT5DenseGatedGeluDense(config)
         self.mt5layernorm1 = MT5LayerNorm(config.embedding_size,config.layer_norm_epsilon)
     
-    def forward(self,input_ids,position_bias):
+    def forward(self,input_ids,position_bias,encoder_attention_mask):
         origin_input_ids = input_ids
         input_ids = self.mt5layernorm0(input_ids)
-        input_ids,position_bias = self.mt5encoderlayerattention(input_ids,position_bias)
+        input_ids,position_bias = self.mt5encoderlayerattention(input_ids,position_bias,encoder_attention_mask)
         input_ids = origin_input_ids+self.dropout(input_ids)
         #到这里也是一样的
         origin_input_ids = input_ids
@@ -484,7 +513,7 @@ class MT5EncoderLayerAttention(nn.Module):
         return values
 
     
-    def forward(self,input_ids,position_bias=None):
+    def forward(self,input_ids,position_bias=None,encoder_attention_mask=None):
         #position_bias通过传递的方式，减少模型的计算过程，加快模型的运算速度
         batch_size,seq_length = input_ids.shape[:2]
         query = self.query_layer(input_ids)
@@ -501,6 +530,8 @@ class MT5EncoderLayerAttention(nn.Module):
         real_seq_length,key_length = input_ids.shape[1],input_ids.shape[1]
         if position_bias == None:
             position_bias = self.compute_bias(real_seq_length,key_length)
+        if encoder_attention_mask != None:
+            position_bias = position_bias+encoder_attention_mask
         scores += position_bias
         #到这里目前内容一致
         attn_weights = F.softmax(scores,dim=-1)
@@ -609,7 +640,7 @@ class MT5DecoderLayerAttention(nn.Module):
         return values
 
     
-    def forward(self,input_ids,encoder_output,past_key_value=None,position_bias=None):
+    def forward(self,input_ids,encoder_output,extended_attention_mask,past_key_value=None,position_bias=None):
         #position_bias通过传递的方式，减少模型的计算过程，加快模型的运算速度
         batch_size,seq_length = input_ids.shape[:2]
         real_seq_length,key_length = input_ids.shape[1],input_ids.shape[1]
@@ -641,6 +672,7 @@ class MT5DecoderLayerAttention(nn.Module):
         if past_key_value is not None:
             position_bias = position_bias[:, :, -input_ids.size(1) :, :]
             #position_bias.shape = (1,12,1,2)，将多出来的部分去除掉
+        position_bias = position_bias+extended_attention_mask
 
         scores += position_bias
         attn_weights = F.softmax(scores,dim=-1)
