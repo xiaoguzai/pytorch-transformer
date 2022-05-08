@@ -90,3 +90,13 @@ tensor([[[-0.0735,  0.0784, -0.0296,  ..., -0.1395, -0.0193,  0.0079],
        grad_fn=<NativeLayerNormBackward>)
 
 ```
+5.8更新nezha
+将
+```python
+self.relative_positions_encoding = self.relative_positions_encoding[:seq_len,:seq_len,:]
+```
+更新为
+```python
+current_relative_positions_encoding = self.relative_positions_encoding[:seq_len,:seq_len,:]
+```
+保证self.relative_positions_encoding的长度不会变得越来越小
