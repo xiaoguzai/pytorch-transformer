@@ -155,7 +155,9 @@ class MT5Generation(nn.Module):
             #print('@@@loss = @@@')
             #print(loss)
             #print('@@@@@@@@@@@@@')
-            return output_ids,loss,layer_key_value_list,cross_key_value_list
+            #return output_ids,loss,layer_key_value_list,cross_key_value_list
+            return output_ids,loss
+            #too many values to unpack这里代指这个部分
         else:
             return output_ids,layer_key_value_list,cross_key_value_list
 
