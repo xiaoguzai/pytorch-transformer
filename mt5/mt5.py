@@ -78,7 +78,8 @@ def greedy_generate(model,config,input_ids,labels=None,max_length = 20):
             output_id = torch.argmax(result,axis=-1)
             decoder_ids = output_id[:,None]
             output_id = output_id[:,None]*unfinished_sequences + pad_token_id*(1-unfinished_sequences)
-            result_id = torch.cat([input_ids,output_id],dim=-1)
+            #result_id = torch.cat([input_ids,output_id],dim=-1)
+            result_id = output_id
             #这里的input_id的对应值始终保持不变,decoder_ids为不断拼接的结果
             #从而得到最终的result_id的结果
             flag = flag+1
@@ -99,6 +100,7 @@ def greedy_generate(model,config,input_ids,labels=None,max_length = 20):
             break
     print('result_id = ')
     print(result_id)
+    return result_id
 
 class MT5Generation(nn.Module):
     def __init__(self,config,**kwargs):
@@ -128,34 +130,38 @@ class MT5Generation(nn.Module):
         # replace possible -100 values in labels by `pad_token_id`
         shifted_input_ids.masked_fill_(shifted_input_ids == -100, self.config.pad_token_id)
         assert torch.all(shifted_input_ids >= 0).item(), "Verify that `shifted_input_ids` has only positive values"
+        shifted_input_ids.to(input_ids.device)
         return shifted_input_ids
     
     def forward(self,input_ids,labels=None,generate=True,layer_key_value_list=None,cross_key_value_list=None):
+        #input_ids.to(device)
+        #labels.to(device)
         if generate == False:
             assert (
                 labels == None,
             ), f"Train t5 labels cannot be None."
             decoder_ids = self._shift_right(labels)
+            decoder_ids.to(labels.device)
         else:
             #生成部分的内容
             if labels == None:
                 #第一波生成
                 batch_size = input_ids.shape[0]
                 decoder_ids = torch.ones((batch_size,1),dtype=torch.long,device=input_ids.device)*self.config.decoder_start_token_id
+                decoder_ids.to(input_ids.device)
             else:
                 #后续波生成
                 decoder_ids = labels
+                decoder_ids.to(labels.device)
+        self.mt5.to(input_ids.device)
         output_ids,layer_key_value_list,cross_key_value_list = self.mt5(input_ids,labels=decoder_ids,layer_key_value_list=layer_key_value_list,\
                                                                         cross_key_value_list=cross_key_value_list)
+        self.lm_head.to(input_ids.device)
         output_ids = self.lm_head(output_ids)
         if generate == False:
             #训练模式
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
             loss = loss_fct(output_ids.view(-1,output_ids.size(-1)), labels.view(-1))
-            #print('@@@loss = @@@')
-            #print(loss)
-            #print('@@@@@@@@@@@@@')
-            #return output_ids,loss,layer_key_value_list,cross_key_value_list
             return output_ids,loss
             #too many values to unpack这里代指这个部分
         else:
@@ -202,8 +208,11 @@ class MT5(nn.Module):
         encoder_attention_mask = input_ids.ne(self.config.pad_token_id).long()
         encoder_attention_mask = (1.0 - encoder_attention_mask)*-10000.0
         encoder_attention_mask = encoder_attention_mask[:,None,None,:]
+        encoder_attention_mask = encoder_attention_mask.to(input_ids.device)
         decoder_attention_mask = decoder_ids.ne(self.config.pad_token_id).long()
+        decoder_attention_mask = decoder_attention_mask.to(input_ids.device)
         extended_decoder_attention_mask = (1.0 - decoder_attention_mask)*-10000.0
+        extended_decoder_attention_mask = extended_decoder_attention_mask.to(input_ids.device)
         encoderoutput,_ = self.mt5encoder(input_ids,encoder_attention_mask)
         output_ids,layer_key_value_list,cross_key_value_list = self.mt5decoder(input_ids=decoder_ids,encoder_output=encoderoutput,\
                                                                               layer_key_value_list=layer_key_value_list,cross_key_value_list=cross_key_value_list)
@@ -329,6 +338,7 @@ class MT5Decoder(nn.Module):
         extended_attention_mask = causal_mask[:,None,:,:]
         extended_attention_mask = extended_attention_mask.to(input_ids.dtype)
         extended_attention_mask = (1.0-extended_attention_mask)*(-10000)
+        extended_attention_mask = extended_attention_mask.to(input_ids.device)
         if layer_key_value_list == None:
             layer_key_value_list = [None]*self.config.num_layers
         if cross_key_value_list == None:
@@ -674,7 +684,9 @@ class MT5DecoderLayerAttention(nn.Module):
         if past_key_value is not None:
             position_bias = position_bias[:, :, -input_ids.size(1) :, :]
             #position_bias.shape = (1,12,1,2)，将多出来的部分去除掉
+        #position_bias = position_bias.to(input_ids.device)
         position_bias = position_bias+extended_attention_mask
+        #position_bias = position_bias.to(input_ids.device)
 
         scores += position_bias
         attn_weights = F.softmax(scores,dim=-1)
@@ -814,6 +826,7 @@ class MT5DecoderCrossAttention(nn.Module):
             #在decodercrossattention中使用的为全零的矩阵
             encoder_length = encoder_output.shape[1]
             position_bias = torch.zeros(1,self.config.num_heads,seq_length,encoder_length)
+        position_bias = position_bias.to(input_ids.device)
         past_key_value = [key,value]
         scores += position_bias
         attn_weights = F.softmax(scores,dim=-1)
