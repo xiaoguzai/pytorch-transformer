@@ -64,6 +64,33 @@ class MT5Config(object):
         self.vocab_size = vocab_size
 
 @torch.no_grad()
+def new_greedy_generate(model,config,input_ids,labels=None,max_length = 20):
+    model.eval()
+    flag = 0
+    unfinished_sequences = input_ids.new(input_ids.shape[0]).fill_(1)
+    unfinished_sequences = unfinished_sequences[:,None]
+    pad_token_id = config.pad_token_id
+    eos_token_id = config.eos_token_id
+    labels = torch.ones(input_ids.shape[0],1)*config.decoder_start_token_id
+    labels = labels.to(torch.int64)
+    output_id = labels
+    while True:
+        result,_,_ = model(input_ids,labels=labels)
+        result = result[:,-1,:]
+        output_id = torch.argmax(result,axis=-1)
+        decoder_ids = output_id[:,None]
+        output_id = output_id[:,None]*unfinished_sequences + pad_token_id*(1-unfinished_sequences)
+        #result_id = torch.cat([input_ids,output_id],dim=-1)
+        #这里的input_id的对应值始终保持不变,decoder_ids为不断拼接的结果
+        #从而得到最终的result_id的结果
+        labels = torch.cat([labels, output_id],dim=-1)
+        flag = flag+1
+        unfinished_sequences = unfinished_sequences.mul((decoder_ids != eos_token_id).long())
+        if unfinished_sequences.max() == 0 or flag > max_length:
+            break
+    return labels
+
+@torch.no_grad()
 def greedy_generate(model,config,input_ids,labels=None,max_length = 20):
     model.eval()
     flag = 0
@@ -98,8 +125,6 @@ def greedy_generate(model,config,input_ids,labels=None,max_length = 20):
         unfinished_sequences = unfinished_sequences.mul((decoder_ids != eos_token_id).long())
         if unfinished_sequences.max() == 0 or flag > max_length:
             break
-    print('result_id = ')
-    print(result_id)
     return result_id
 
 class MT5Generation(nn.Module):
