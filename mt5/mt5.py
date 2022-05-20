@@ -88,7 +88,7 @@ def new_greedy_generate(model,config,input_ids,labels=None,max_length = 20):
         unfinished_sequences = unfinished_sequences.mul((decoder_ids != eos_token_id).long())
         if unfinished_sequences.max() == 0 or flag > max_length:
             break
-    return labels
+    return labels[:,1:]
 
 @torch.no_grad()
 def greedy_generate(model,config,input_ids,labels=None,max_length = 20):
