@@ -831,18 +831,20 @@ class MT5DecoderCrossAttention(nn.Module):
         query = self.query_layer(input_ids)
         query = query.view(batch_size,-1,self.config.num_heads,self.config.size_per_head).transpose(1,2)
         #这里input_ids与past_key_value[0]连接之前需要变换维度
-        key = self.key_layer(encoder_output)
+        
         #past_key_value[0]保存上一波的key的值        
         if past_key_value != None:
             key = past_key_value[0]
         else:
+            key = self.key_layer(encoder_output)
             key = key.view(batch_size,-1,self.config.num_heads,self.config.size_per_head).transpose(1,2)
         #key.size = (2,5,768)
-        value = self.value_layer(encoder_output)
+        
         if past_key_value != None:
             #value = torch.cat([past_key_value[1],value],dim=2)
             value = past_key_value[1]
         else:
+            value = self.value_layer(encoder_output)
             value = value.view(batch_size,-1,self.config.num_heads,self.config.size_per_head).transpose(1,2)
         scores = torch.matmul(
             query,key.transpose(3,2)
