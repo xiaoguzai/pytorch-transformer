@@ -371,15 +371,15 @@ class MT5Decoder(nn.Module):
         #layer_key_value_list和cross_key_value_list当前这一波模型计算出来的内容
         layer_position_bias,cross_position_bias = None,None
         for index in range(self.config.num_layers):
-            current_decoder_layer_attention = self.mt5decoderlayer_transformers_list[index]
-            current_decoder_cross_attention= self.mt5decodercross_transformers_list[index]
+            current_decoder_layer_transformer = self.mt5decoderlayer_transformers_list[index]
+            current_decoder_cross_transformer = self.mt5decodercross_transformers_list[index]
             #这里针对layer_attention和cross_attention中的is_first_layer赋值很关键
             #因为前面的is_first_layer值的改变并不会引起后面的is_first_layer的值改变
             #第一次的时候layer_position_bias和cross_position_bias的值都为None
             #后续的时候layer_position_bias和cross_position_bias接着前面的继续使用
-            input_ids,past_key_value,layer_position_bias = current_decoder_layer_attention(input_ids,encoder_output,extended_attention_mask,layer_key_value_list[index],layer_position_bias)
+            input_ids,past_key_value,layer_position_bias = current_decoder_layer_transformer(input_ids,encoder_output,extended_attention_mask,layer_key_value_list[index],layer_position_bias)
             layer_key_value_list[index] = past_key_value
-            input_ids,past_key_value,cross_position_bias = current_decoder_cross_attention(input_ids,encoder_output,cross_key_value_list[index],cross_position_bias)
+            input_ids,past_key_value,cross_position_bias = current_decoder_cross_transformer(input_ids,encoder_output,cross_key_value_list[index],cross_position_bias)
             #第一波计算要单独调用的原因:没有之前的layer_key_value_list[index-1]以及cross_key_value_list[index-1]的past_key_value的信息
             cross_key_value_list[index] = past_key_value
         input_ids = self.final_layer_norm(input_ids)
