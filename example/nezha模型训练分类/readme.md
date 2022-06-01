@@ -1,6 +1,8 @@
 # 例子一览
 
 1.[剧本角色情感识别训练方法](https://www.datafountain.cn/competitions/518)
+比赛链接上面可点击
+文件：剧本角色情感识别example-709x.py
 
 数据下载
 
