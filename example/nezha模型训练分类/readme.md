@@ -12,7 +12,8 @@ nezha模型文件下载地址：
 
 https://huggingface.co/peterchou/nezha-chinese-base
 
-2.直接调用模型输出结果
+2.直接调用nezha模型输出结果
+文件：直接调用nezha模型.py
 
 
 
